@@ -3,20 +3,13 @@ from PIL import Image
 import numpy as np
 from routines import segment_image
 from routines import utilities
-
-# image = Image.open('image02113.png')
-# imgar = np.array(image)
-# boundary_tuple = segment_image(imgar)
-# boundary_image_dic = boundary_tuple[1]['boundary_image']
-# boundary_image = utilities.image_string_to_numpy(boundary_image_dic[1])
-# boundary_show = Image.fromarray(boundary_image * 255)  # 0-1
-# boundary_show.show()
+import argparse
 
 
 def read_to_array(image_directory):
     """Load the image and change it to array.
 
-    Keyword arguments:
+    Arguments:
     image_directory: the full string of the image directory.
 
     Return: the image array.
@@ -29,7 +22,7 @@ def read_to_array(image_directory):
 def detect_boundary(image_array):
     """Detect boundary on the image.
 
-    Keyword arguments:
+    Arguments:
     image_array: the image array.
 
     Return: the boundary image.
@@ -48,7 +41,7 @@ def detect_boundary(image_array):
 def image_show(image_array):
     """Show the image.
 
-    Keyword arguments:
+    Arguments:
     image_array: the image array.
 
     No return.
@@ -57,10 +50,24 @@ def image_show(image_array):
     boundary_show.show()
 
 
+def build_parser():
+    """Input arguments."""
+    # __doc__ automatically contains the docstring for the file.
+    parser = argparse.ArgumentParser(description=__doc__)
+
+    parser.add_argument(
+        type=str,
+        help='A image to work on',
+        dest='imagename'
+    )
+
+    return parser
+
+
 def main():
     """Main function."""
-    imagedir = 'image02113.png'
-    image_array = read_to_array(imagedir)
+    args = build_parser().parse_args()
+    image_array = read_to_array(args.imagename)
     boundary_image = detect_boundary(image_array)
     image_show(boundary_image)
 

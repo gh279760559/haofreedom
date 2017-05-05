@@ -9,109 +9,93 @@ import boundary_detection_2D
 import argparse
 from pathlib import Path
 from plyfile import PlyData
+import json
 
 
 def build_parser():
     """Input arguments."""
-    # __doc__ automatically contains the docstring for the file.
-    parser = argparse.ArgumentParser(description='all data')
+    parser = argparse.ArgumentParser(description=__doc__)
 
     parser.add_argument(
-        nargs='?',
-        const=1,
+        '-f', '--filename',
+        help='Name of json file to load',
         type=str,
-        help='dataset Number',
-        dest='datasetNum',
-        default='93'
-    )
-    parser.add_argument(
-        nargs='?',
-        const=1,
-        type=str,
-        help='ply file',
-        dest='plyfile',
-        default='093.ply'
-    )
-    parser.add_argument(
-        nargs='?',
-        const=1,
-        type=str,
-        help='data directory',
-        dest='datadir',
-        default='data'
-    )
-    parser.add_argument(
-        nargs='?',
-        const=1,
-        type=str,
-        help='image directory',
-        dest='imagedir',
-        default='image'
-    )
-    parser.add_argument(
-        nargs='?',
-        const=1,
-        type=str,
-        help='depth directory',
-        dest='depthdir',
-        default='depth'
-    )
-    parser.add_argument(
-        nargs='?',
-        const=1,
-        type=int,
-        help='set the parameters for testing',
-        dest='rang',
-        default='100'
-    )
-    parser.add_argument(
-        nargs='?',
-        const=1,
-        type=int,
-        help='set the image index you want to calculate',
-        dest='imgind',
-        default='1'
-    )
-    parser.add_argument(
-        nargs='?',
-        const=1,
-        type=int,
-        help='the intinsic variables cx',
-        dest='cx',
-        default='320'
-    )
-    parser.add_argument(
-        nargs='?',
-        const=1,
-        type=int,
-        help='the intinsic variables cy',
-        dest='cy',
-        default='240'
-    )
-    parser.add_argument(
-        nargs='?',
-        const=1,
-        type=float,
-        help='the intinsic variables fx',
-        dest='fx',
-        default='544.47329'
-    )
-    parser.add_argument(
-        nargs='?',
-        const=1,
-        type=float,
-        help='the intinsic variables fy',
-        dest='fy',
-        default='544.47329'
-    )
-    parser.add_argument(
-        nargs='?',
-        const=1,
-        type=float,
-        help='the threshold variables t',
-        dest='threshold',
-        default='0.1'
-    )
+        default='parameters.json'
+        )
+
+    #
+    # parser.add_argument(
+    #     '-d', '--dataset_number',
+    #     type=str,
+    #     help='input dataset Number (from ScenNN)',
+    #     default='93'
+    # )
+    # parser.add_argument(
+    #     '-p', '--plyfile',
+    #     type=str,
+    #     help='input ply file (from ScenNN)',
+    #     default='093.ply'
+    # )
+    # parser.add_argument(
+    #     '--data_directory',
+    #     type=str,
+    #     help='the data directory',
+    #     default='data'
+    # )
+    # parser.add_argument(
+    #     '--image_directory',
+    #     type=str,
+    #     help='the image directory',
+    #     default='image'
+    # )
+    # parser.add_argument(
+    #     '--depth_directory',
+    #     type=str,
+    #     help='the depth directory',
+    #     default='depth'
+    # )
+    # parser.add_argument(
+    #     '--rang',
+    #     type=int,
+    #     help='it may take a while to plot all points, instead set the rang',
+    #     default='100'
+    # )
+    # parser.add_argument(
+    #     '--image_index',
+    #     type=int,
+    #     help='set the image index you want to calculate',
+    #     default='1'
+    # )
+    # parser.add_argument(
+    #     '--cx',
+    #     type=int,
+    #     help='the intinsic variables cx',
+    #     default='320'
+    # )
+    # parser.add_argument(
+    #     '--cy',
+    #     type=int,
+    #     help='the intinsic variables cy',
+    #     default='240'
+    # )
+    # parser.add_argument(
+    #     '--fx',
+    #     type=float,
+    #     help='the intinsic variables fx',
+    #     default='544.47329'
+    # )
+    # parser.add_argument(
+    #     '--fy',
+    #     type=float,
+    #     help='the intinsic variables fy',
+    #     default='544.47329'
+    # )
+    # parser.add_argument(
+    #     '-t', '--threshold',
+    #     type=float,
+    #     help='the threshold variables t',
+    #     default='0.1'
+    # )
 
     return parser
 
@@ -121,22 +105,22 @@ def line_to_list_of_float(line):
     return [float(value) for value in line.split()]
 
 
-def get_trajactory(parentdir):
-    """Compute the trajactory."""
+def get_trajectory(parentdir):
+    """Compute the trajectory."""
     with open(os.path.join(parentdir, 'trajectory.log'), "r") as f:
         lines = f.read().splitlines()
-    trajactory = np.array([line_to_list_of_float(line)
+    trajectory = np.array([line_to_list_of_float(line)
                           for index, line in enumerate(lines)
                           if index % 5])
-    return trajactory
+    return trajectory
 
 
-def loadImg_name(imagedir):
+def loadImg_name(image_directory):
     """Load all imgs from the directory."""
-    allimg = [os.path.join(imagedir, file)
-              for file in sorted(os.listdir(imagedir))
-              if os.path.splitext(file)[1] == '.png']
-    return allimg
+    all_img = [os.path.join(image_directory, file)
+               for file in sorted(os.listdir(image_directory))
+               if os.path.splitext(file)[1] == '.png']
+    return all_img
 
 
 def calulate_3Dpt(pt2D, ptd, cx, cy, fx, fy, threshold):
@@ -157,8 +141,28 @@ def calulate_3Dpt(pt2D, ptd, cx, cy, fx, fy, threshold):
     return pt3
 
 
-def test_result(image_array, boundary_image,
-                parentdir, args, pt3cam, pt3world):
+def load_npy(parentdir, dataset_number, image_index, plyfile):
+    """Load the npy file, if not exist will build it."""
+    npyfile = Path(parentdir + 'boundary' + dataset_number +
+                   'img' + str(image_index)+'.mat')
+    filename = '{}.npy'.format(dataset_number)
+    if npyfile.is_file():
+        # read the ply file
+        plydata = np.load(os.path.join(parentdir, filename))
+    else:
+        # plydata = PlyData.read(parentdir + plyfile)
+        plydata = PlyData.read(os.path.join(parentdir, plyfile))
+        np.save(os.path.join(parentdir, filename), plydata)
+
+    x, y, z, r, g, b = (plydata[0].data[key]
+                        for key in ('x', 'y', 'z', 'red', 'green', 'blue'))
+    vertices = np.column_stack((x, y, z))
+    rgb = np.column_stack((r, g, b))
+    return vertices, rgb
+
+
+def test_result(image_array, boundary_image, parentdir, dataset_number,
+                image_index, rang, plyfile, pt3cam, pt3world):
     """Test results."""
     # %% test
     # show the image
@@ -166,33 +170,19 @@ def test_result(image_array, boundary_image,
     # show the boundary img
     boundary = Image.fromarray(boundary_image * 255)  # 0-1
     boundary.show()
-    # save it
-    scipy.io.savemat(parentdir + 'boundary' + args.datasetNum +
-                     'img' + str(args.imgind)+'.mat',
-                     {'boundary_image': boundary_image})
-    npyfile = Path(parentdir + '/' + args.datasetNum + '.npy')
-    if npyfile.is_file():
-        plydata = np.load(parentdir + '/' + args.datasetNum + '.npy')
-    else:
-        # read the ply file
-        plydata = PlyData.read(parentdir + args.plyfile)
-        np.save(parentdir + '/' + args.datasetNum, plydata)
-        plydata = np.load(parentdir + '/' + args.datasetNum + '.npy')
 
-    x = plydata[0].data['x']
-    y = plydata[0].data['y']
-    z = plydata[0].data['z']
-    r = plydata[0].data['red']
-    g = plydata[0].data['green']
-    b = plydata[0].data['blue']
-    # vertex_index = plydata[0].data['vertex_indices']
-    x1 = x[::args.rang]
-    y1 = y[::args.rang]
-    z1 = z[::args.rang]
-    r1 = r[::args.rang]
-    g1 = g[::args.rang]
-    b1 = b[::args.rang]
-    rgb = np.column_stack((r1, g1, b1)) / 255.
+    # save it
+    npyfile = Path(parentdir + 'boundary' + dataset_number +
+                   'img' + str(image_index)+'.mat')
+    if npyfile.is_file() is False:
+        scipy.io.savemat(parentdir + 'boundary' + dataset_number +
+                         'img' + str(image_index)+'.mat',
+                         {'boundary_image': boundary_image})
+
+    vertices, rgb = load_npy(parentdir, dataset_number, image_index, plyfile)
+    vertices = vertices[::rang, :]
+    # ipdb.set_trace()
+    rgb = rgb[::rang, :] / 255
 
     fig = plt.figure()
     ax = fig.gca(projection='3d')
@@ -202,10 +192,8 @@ def test_result(image_array, boundary_image,
 
     fig = plt.figure()
     ax = fig.gca(projection='3d')
-    ax.scatter(x1, y1, z1, s=0.5, c=rgb)
+    ax.scatter(vertices[:, 0], vertices[:, 1], vertices[:, 2], s=0.5, c=rgb)
     ax.legend()
-    # for i in range(len(x)):
-    #     plt.scatter(x[i], y[i], z[i], c=[r[i], g[i], b[i]])
     plt.show()
     plt.hold(True)
     ax.scatter(pt3world[:, 0], pt3world[:, 1], pt3world[:, 2],
@@ -219,33 +207,54 @@ def test_result(image_array, boundary_image,
 def main():
     """Main function."""
     args = build_parser().parse_args()
+    assert os.path.isfile(args.filename), (
+        'File {} does not exist!'.format(args.filename)
+    )
+    with open(args.filename) as fd:
+        data = json.load(fd)
+
+    dataset_number, plyfile = (
+        data[key] for key in
+        ('dataset_number', 'plyfile')
+        )
+    data_directory, image_directory, depth_directory = (
+        data[key] for key in
+        ('data_directory', 'image_directory', 'depth_directory')
+        )
+    rang, image_index = (data[key] for key in ('rang', 'image_index'))
+    cx, cy, fx, fy = (data[key] for key in ('cx', 'cy', 'fx', 'fy'))
+    threshold = data['t']
+
     upperdir = os.path.abspath(os.path.join(os.getcwd(), os.pardir))
-    parentdir = os.path.join(upperdir, args.datadir, args.datasetNum)
-    imagedir = os.path.join(parentdir, args.imagedir)
-    depthdir = os.path.join(parentdir, args.depthdir)
-    trajactory = get_trajactory(parentdir)
-    allimg = loadImg_name(imagedir)
-    alldepth = loadImg_name(depthdir)
+    parentdir = os.path.join(
+                            upperdir, data_directory, dataset_number
+                            )
+    image_directory = os.path.join(parentdir, image_directory)
+    depth_directory = os.path.join(parentdir, depth_directory)
+    trajectory = get_trajectory(parentdir)
+    all_image = loadImg_name(image_directory)
+    all_depth = loadImg_name(depth_directory)
     # %% 3D points calculation from the boundary image
     # load and array the image
-    image_array = boundary_detection_2D.read_to_array(allimg[args.imgind])
+    image_array = boundary_detection_2D.read_to_array(
+                                                    all_image[image_index]
+                                                     )
     imagedepth_array = boundary_detection_2D.read_to_array(
-                       alldepth[args.imgind])
+                       all_depth[image_index])
     # use server method SE/HED to get the segment image
     boundary_image = boundary_detection_2D.detect_boundary(image_array)
     # load the trajectory
-    startpos = 4 * (args.imgind - 1)
-    cameramat = trajactory[startpos:startpos+3, :]
+    startpos = 4 * (image_index - 1)
+    cameramat = trajectory[startpos:startpos+3, :]
     # get the pixel position of the boundary and the depth value
     # Now apply the depth to the 3d point
-    pt3cam = calulate_3Dpt(boundary_image, imagedepth_array, args.cx, args.cy,
-                           args.fx, args.fy, args.threshold)
+    pt3cam = calulate_3Dpt(boundary_image, imagedepth_array, cx, cy,
+                           fx, fy, threshold)
 
     # Now apply the camera matrix
-
     pt3world = np.dot(cameramat[:, 0:3], pt3cam).T + cameramat[:, 3]
-    test_result(image_array, boundary_image,
-                parentdir, args, pt3cam, pt3world)
+    test_result(image_array, boundary_image, parentdir, dataset_number,
+                image_index, rang, plyfile, pt3cam, pt3world)
 
 
 if __name__ == '__main__':

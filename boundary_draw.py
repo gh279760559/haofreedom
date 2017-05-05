@@ -10,7 +10,6 @@ import argparse
 from pathlib import Path
 from plyfile import PlyData
 import json
-import ipdb
 
 
 def build_parser():
@@ -69,7 +68,6 @@ def calulate_3Dpt(pt2D, ptd, cx, cy, fx, fy, threshold):
 
 def load_npy(parentdir, dataset_number, image_index, plyfile):
     """Load the npy file, if not exist will build it."""
-    ipdb.set_trace()
     filename = '{}.npy'.format(dataset_number)
     npyfile = Path(os.path.join(parentdir, filename))
     if npyfile.is_file():
@@ -99,30 +97,27 @@ def test_result(image_array, boundary_image, parentdir, dataset_number,
     filename = '{}.mat'.format('boundary' + str(image_index))
     npyfile = Path(os.path.join(parentdir, filename))
     if npyfile.is_file() is False:
-        scipy.io.savemat(npyfile,
-                         {'boundary_image': boundary_image})
+        scipy.io.savemat(
+            os.path.join(parentdir, filename),
+            {'boundary_image': boundary_image})
     vertices, rgb = load_npy(parentdir, dataset_number, image_index, plyfile)
     vertices = vertices[::rang, :]
-    # ipdb.set_trace()
     rgb = rgb[::rang, :] / 255
 
     fig = plt.figure()
     ax = fig.gca(projection='3d')
     ax.plot(pt3cam[0, :], pt3cam[1, :], pt3cam[2, :], '.b', ms='0.5')
-    ax.legend()
     plt.show()
 
     fig = plt.figure()
     ax = fig.gca(projection='3d')
     ax.scatter(vertices[:, 0], vertices[:, 1], vertices[:, 2], s=0.5, c=rgb)
-    ax.legend()
     plt.show()
     plt.hold(True)
     ax.scatter(pt3world[:, 0], pt3world[:, 1], pt3world[:, 2],
                facecolor='0', s=2)
     # ax.plot(pt3cam[:, 0], pt3cam[:, 1], pt3cam[:, 2], '.b', ms='0.5')
     ax.set_axis_off()
-    ax.legend()
     plt.show()
 
 
@@ -136,12 +131,11 @@ def main():
         data = json.load(fd)
 
     dataset_number, plyfile = (
-        data[key] for key in
-        ('dataset_number', 'plyfile')
+        data[key] for key in ('dataset_number', 'plyfile')
         )
     data_directory, image_directory, depth_directory = (
-        data[key] for key in
-        ('data_directory', 'image_directory', 'depth_directory')
+        data[key]
+        for key in ('data_directory', 'image_directory', 'depth_directory')
         )
     rang, image_index = (data[key] for key in ('rang', 'image_index'))
     cx, cy, fx, fy = (data[key] for key in ('cx', 'cy', 'fx', 'fy'))

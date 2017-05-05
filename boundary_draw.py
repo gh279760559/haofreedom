@@ -22,81 +22,6 @@ def build_parser():
         type=str,
         default='parameters.json'
         )
-
-    #
-    # parser.add_argument(
-    #     '-d', '--dataset_number',
-    #     type=str,
-    #     help='input dataset Number (from ScenNN)',
-    #     default='93'
-    # )
-    # parser.add_argument(
-    #     '-p', '--plyfile',
-    #     type=str,
-    #     help='input ply file (from ScenNN)',
-    #     default='093.ply'
-    # )
-    # parser.add_argument(
-    #     '--data_directory',
-    #     type=str,
-    #     help='the data directory',
-    #     default='data'
-    # )
-    # parser.add_argument(
-    #     '--image_directory',
-    #     type=str,
-    #     help='the image directory',
-    #     default='image'
-    # )
-    # parser.add_argument(
-    #     '--depth_directory',
-    #     type=str,
-    #     help='the depth directory',
-    #     default='depth'
-    # )
-    # parser.add_argument(
-    #     '--rang',
-    #     type=int,
-    #     help='it may take a while to plot all points, instead set the rang',
-    #     default='100'
-    # )
-    # parser.add_argument(
-    #     '--image_index',
-    #     type=int,
-    #     help='set the image index you want to calculate',
-    #     default='1'
-    # )
-    # parser.add_argument(
-    #     '--cx',
-    #     type=int,
-    #     help='the intinsic variables cx',
-    #     default='320'
-    # )
-    # parser.add_argument(
-    #     '--cy',
-    #     type=int,
-    #     help='the intinsic variables cy',
-    #     default='240'
-    # )
-    # parser.add_argument(
-    #     '--fx',
-    #     type=float,
-    #     help='the intinsic variables fx',
-    #     default='544.47329'
-    # )
-    # parser.add_argument(
-    #     '--fy',
-    #     type=float,
-    #     help='the intinsic variables fy',
-    #     default='544.47329'
-    # )
-    # parser.add_argument(
-    #     '-t', '--threshold',
-    #     type=float,
-    #     help='the threshold variables t',
-    #     default='0.1'
-    # )
-
     return parser
 
 
@@ -150,7 +75,6 @@ def load_npy(parentdir, dataset_number, image_index, plyfile):
         # read the ply file
         plydata = np.load(os.path.join(parentdir, filename))
     else:
-        # plydata = PlyData.read(parentdir + plyfile)
         plydata = PlyData.read(os.path.join(parentdir, plyfile))
         np.save(os.path.join(parentdir, filename), plydata)
 

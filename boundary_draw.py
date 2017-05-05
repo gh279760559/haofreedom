@@ -10,6 +10,7 @@ import argparse
 from pathlib import Path
 from plyfile import PlyData
 import json
+import ipdb
 
 
 def build_parser():
@@ -68,16 +69,15 @@ def calulate_3Dpt(pt2D, ptd, cx, cy, fx, fy, threshold):
 
 def load_npy(parentdir, dataset_number, image_index, plyfile):
     """Load the npy file, if not exist will build it."""
-    npyfile = Path(parentdir + 'boundary' + dataset_number +
-                   'img' + str(image_index)+'.mat')
+    ipdb.set_trace()
     filename = '{}.npy'.format(dataset_number)
+    npyfile = Path(os.path.join(parentdir, filename))
     if npyfile.is_file():
         # read the ply file
         plydata = np.load(os.path.join(parentdir, filename))
     else:
         plydata = PlyData.read(os.path.join(parentdir, plyfile))
         np.save(os.path.join(parentdir, filename), plydata)
-
     x, y, z, r, g, b = (plydata[0].data[key]
                         for key in ('x', 'y', 'z', 'red', 'green', 'blue'))
     vertices = np.column_stack((x, y, z))
@@ -96,13 +96,11 @@ def test_result(image_array, boundary_image, parentdir, dataset_number,
     boundary.show()
 
     # save it
-    npyfile = Path(parentdir + 'boundary' + dataset_number +
-                   'img' + str(image_index)+'.mat')
+    filename = '{}.mat'.format('boundary' + str(image_index))
+    npyfile = Path(os.path.join(parentdir, filename))
     if npyfile.is_file() is False:
-        scipy.io.savemat(parentdir + 'boundary' + dataset_number +
-                         'img' + str(image_index)+'.mat',
+        scipy.io.savemat(npyfile,
                          {'boundary_image': boundary_image})
-
     vertices, rgb = load_npy(parentdir, dataset_number, image_index, plyfile)
     vertices = vertices[::rang, :]
     # ipdb.set_trace()

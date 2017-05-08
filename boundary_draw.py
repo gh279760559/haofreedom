@@ -30,9 +30,9 @@ def line_to_list_of_float(line):
     return [float(value) for value in line.split()]
 
 
-def get_trajectory(parentdir):
+def get_trajectory(parent_directory):
     """Compute the trajectory."""
-    with open(os.path.join(parentdir, 'trajectory.log'), "r") as f:
+    with open(os.path.join(parent_directory, 'trajectory.log'), "r") as f:
         lines = f.read().splitlines()
     trajectory = np.array([line_to_list_of_float(line)
                           for index, line in enumerate(lines)
@@ -66,16 +66,16 @@ def calulate_3Dpt(pt2D, ptd, cx, cy, fx, fy, threshold):
     return pt3
 
 
-def load_npy(parentdir, dataset_number, image_index, plyfile):
+def load_npy(parent_directory, dataset_number, image_index, plyfile):
     """Load the npy file, if not exist will build it."""
     filename = '{}.npy'.format(dataset_number)
-    npyfile = Path(os.path.join(parentdir, filename))
+    npyfile = Path(os.path.join(parent_directory, filename))
     if npyfile.is_file():
         # read the ply file
-        plydata = np.load(os.path.join(parentdir, filename))
+        plydata = np.load(os.path.join(parent_directory, filename))
     else:
-        plydata = PlyData.read(os.path.join(parentdir, plyfile))
-        np.save(os.path.join(parentdir, filename), plydata)
+        plydata = PlyData.read(os.path.join(parent_directory, plyfile))
+        np.save(os.path.join(parent_directory, filename), plydata)
     x, y, z, r, g, b = (plydata[0].data[key]
                         for key in ('x', 'y', 'z', 'red', 'green', 'blue'))
     vertices = np.column_stack((x, y, z))
@@ -83,8 +83,8 @@ def load_npy(parentdir, dataset_number, image_index, plyfile):
     return vertices, rgb
 
 
-def test_result(image_array, boundary_image, parentdir, dataset_number,
-                image_index, rang, plyfile, pt3cam, pt3world):
+def test_result(image_array, boundary_image, parent_directory, dataset_number,
+                image_index, rang, plyfile, pt3_camera, pt3_world):
     """Test results."""
     # %% test
     # show the image
@@ -95,18 +95,22 @@ def test_result(image_array, boundary_image, parentdir, dataset_number,
 
     # save it
     filename = '{}.mat'.format('boundary' + str(image_index))
-    npyfile = Path(os.path.join(parentdir, filename))
+    npyfile = Path(os.path.join(parent_directory, filename))
     if npyfile.is_file() is False:
         scipy.io.savemat(
-            os.path.join(parentdir, filename),
+            os.path.join(parent_directory, filename),
             {'boundary_image': boundary_image})
-    vertices, rgb = load_npy(parentdir, dataset_number, image_index, plyfile)
+    vertices, rgb = load_npy(
+                    parent_directory, dataset_number, image_index, plyfile
+                            )
     vertices = vertices[::rang, :]
     rgb = rgb[::rang, :] / 255
 
     fig = plt.figure()
     ax = fig.gca(projection='3d')
-    ax.plot(pt3cam[0, :], pt3cam[1, :], pt3cam[2, :], '.b', ms='0.5')
+    ax.plot(
+        pt3_camera[0, :], pt3_camera[1, :], pt3_camera[2, :], '.b', ms='0.5'
+           )
     plt.show()
 
     fig = plt.figure()
@@ -114,9 +118,11 @@ def test_result(image_array, boundary_image, parentdir, dataset_number,
     ax.scatter(vertices[:, 0], vertices[:, 1], vertices[:, 2], s=0.5, c=rgb)
     plt.show()
     plt.hold(True)
-    ax.scatter(pt3world[:, 0], pt3world[:, 1], pt3world[:, 2],
+    ax.scatter(pt3_world[:, 0], pt3_world[:, 1], pt3_world[:, 2],
                facecolor='0', s=2)
-    # ax.plot(pt3cam[:, 0], pt3cam[:, 1], pt3cam[:, 2], '.b', ms='0.5')
+    # ax.plot(
+    #     pt3_camera[:, 0], pt3_camera[:, 1], pt3_camera[:, 2], '.b', ms='0.5'
+    #        )
     ax.set_axis_off()
     plt.show()
 
@@ -141,13 +147,13 @@ def main():
     cx, cy, fx, fy = (data[key] for key in ('cx', 'cy', 'fx', 'fy'))
     threshold = data['t']
 
-    upperdir = os.path.abspath(os.path.join(os.getcwd(), os.pardir))
-    parentdir = os.path.join(
-                            upperdir, data_directory, dataset_number
+    upper_directory = os.path.abspath(os.path.join(os.getcwd(), os.pardir))
+    parent_directory = os.path.join(
+                            upper_directory, data_directory, dataset_number
                             )
-    image_directory = os.path.join(parentdir, image_directory)
-    depth_directory = os.path.join(parentdir, depth_directory)
-    trajectory = get_trajectory(parentdir)
+    image_directory = os.path.join(parent_directory, image_directory)
+    depth_directory = os.path.join(parent_directory, depth_directory)
+    trajectory = get_trajectory(parent_directory)
     all_image = loadImg_name(image_directory)
     all_depth = loadImg_name(depth_directory)
     # %% 3D points calculation from the boundary image
@@ -161,16 +167,18 @@ def main():
     boundary_image = boundary_detection_2D.detect_boundary(image_array)
     # load the trajectory
     startpos = 4 * (image_index - 1)
-    cameramat = trajectory[startpos:startpos+3, :]
+    camera_matrix = trajectory[startpos:startpos+3, :]
     # get the pixel position of the boundary and the depth value
     # Now apply the depth to the 3d point
-    pt3cam = calulate_3Dpt(boundary_image, imagedepth_array, cx, cy,
-                           fx, fy, threshold)
+    pt3_camera = calulate_3Dpt(
+            boundary_image, imagedepth_array, cx, cy, fx, fy, threshold
+                              )
 
     # Now apply the camera matrix
-    pt3world = np.dot(cameramat[:, 0:3], pt3cam).T + cameramat[:, 3]
-    test_result(image_array, boundary_image, parentdir, dataset_number,
-                image_index, rang, plyfile, pt3cam, pt3world)
+    pt3_world = np.dot(
+                camera_matrix[:, 0:3], pt3_camera).T + camera_matrix[:, 3]
+    test_result(image_array, boundary_image, parent_directory, dataset_number,
+                image_index, rang, plyfile, pt3_camera, pt3_world)
 
 
 if __name__ == '__main__':

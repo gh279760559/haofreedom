@@ -2,10 +2,8 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
-import os
 import boundary_detection_2D
 import boundary_draw
-import json
 
 
 # map 3 to 2
@@ -13,7 +11,7 @@ def map_pt3to_image(pt3, cx, cy, fx, fy):
     """
     Use to map the 3D pt to 2D img.
 
-    Keyword arguments:
+    Arguments:
     pt3 3 by N 3d points;
     cx, cy, fx, fy are the intrinsic parameters.
     """
@@ -21,106 +19,127 @@ def map_pt3to_image(pt3, cx, cy, fx, fy):
     pt3v = pt3[1, :]
     pt3w = pt3[2, :]
     leng = pt3.shape[1]
-    fx = np.matlib.repmat(fx, 1, leng)
-    fy = np.matlib.repmat(fy, 1, leng)
-    cx = np.matlib.repmat(cx, 1, leng)
-    cy = np.matlib.repmat(cy, 1, leng)
+    fx = np.tile(fx, (1, leng))
+    fy = np.tile(fy, (1, leng))
+    cx = np.tile(cx, (1, leng))
+    cy = np.tile(cy, (1, leng))
 
-    x = fx*pt3u/pt3w+cx
-    y = fy*pt3v/pt3w+cy
+    x = fx * pt3u / pt3w + cx
+    y = fy * pt3v / pt3w + cy
     pt2 = np.vstack((y, x))
     return pt2
 
 
-def main():
-    """Main function."""
-    args = boundary_draw.build_parser().parse_args()
-    assert os.path.isfile(args.filename), (
-        'File {} does not exist!'.format(args.filename)
-    )
-    with open(args.filename) as fd:
-        data = json.load(fd)
-
-    row, column = (
-        data[key] for key in ('row', 'column')
-    )
-
-    dataset_number, plyfile = (
-        data[key] for key in ('dataset_number', 'plyfile')
-        )
-    data_directory, image_directory, depth_directory = (
-        data[key]
-        for key in ('data_directory', 'image_directory', 'depth_directory')
-        )
-    rang, image_index = (data[key] for key in ('rang', 'image_index'))
-    cx, cy, fx, fy = (data[key] for key in ('cx', 'cy', 'fx', 'fy'))
-    threshold = data['t']
-
-    upper_directory = os.path.abspath(os.path.join(os.getcwd(), os.pardir))
-    parent_directory = os.path.join(
-                            upper_directory, data_directory, dataset_number
-                            )
-    image_directory = os.path.join(parent_directory, image_directory)
-    depth_directory = os.path.join(parent_directory, depth_directory)
-    trajectory = boundary_draw.get_trajectory(parent_directory)
-    # load the trajectory
+def load_trajectory(trajectory, image_index):
+    """Load trajectory from the dataset."""
     start_position = 4 * (image_index - 1)
     camera_matrix = trajectory[start_position:start_position+3, :]
     rot = camera_matrix[:, 0:3]
     tau = camera_matrix[:, 3]
-    # remove the points wrong direction
-    # camera direction
-    vertices, facevertexcdata = boundary_draw.load_npy(
-                        parent_directory, dataset_number, image_index, plyfile
-                                                      )
-    vertices = vertices.T
+    return rot, tau
 
-    camd = np.array([np.dot(rot.T, np.array([0, 0, 1]))]).T
-    camds = np.matlib.repmat(camd, 1, vertices.shape[1])
 
-    pt3_tmp1 = vertices[:, np.einsum('ij,ij->j', vertices, camds) > 0]
-    facevertexcdata = facevertexcdata.T
-    facevertexcdata1 = facevertexcdata[
+def remove_wrong_direction(camera_rot, vertices, facevertexcdata):
+    """Remove the wrong face direction between the pt3 and camera."""
+    camd = np.array([np.dot(camera_rot.T, np.array([0, 0, 1]))]).T
+    camds = np.tile(camd, (1, vertices.shape[1]))
+    # do something in Matlab like pt3_tmp1 = vertices(:,dot(vertices,camds)>=0)
+    index = np.einsum('ij,ij->j', vertices, camds) > 0
+    pt3_infront = vertices[:, index]
+    face_color = facevertexcdata[
         :, np.einsum('ij,ij->j', vertices, camds) > 0
     ]
+    return pt3_infront, face_color, index
 
-    # map to 2d img
-    taus = np.matlib.repmat(tau, pt3_tmp1.shape[1], 1)
-    pt3_tmp2, resid, rank, s = np.linalg.lstsq(rot, pt3_tmp1-taus.T)
-    pt2tmp1 = map_pt3to_image(pt3_tmp2, cx, cy, fx, fy)
 
-    # find the row>=pt2[0]>0, column>=pt2[1]>0
+def map_3dto2d(pt3, rotate, transform, cx, cy, fx, fy):
+    """Map the 3D points to 2D image."""
+    taus = np.tile(transform, (pt3.shape[1], 1))
+    pt3_tmp2, _, _, _ = np.linalg.lstsq(rotate, pt3-taus.T)
+    pt2 = map_pt3to_image(pt3_tmp2, cx, cy, fx, fy)
+    return pt2
+
+
+def crop_2d(pt2, facevertexcdata, row, column):
+    """Crop the mapped 2D point so that it is in the image."""
     ind = np.logical_and.reduce(
-        (pt2tmp1[0, :] > 0, pt2tmp1[0, :] <= row, pt2tmp1[1, :] > 0,
-            pt2tmp1[1, :] <= column))
-    pt21 = pt2tmp1[:, ind]
-    pt2_color = facevertexcdata1[:, ind]
-    # %% test
-    all_image = boundary_draw.loadImg_name(image_directory)
-    all_depth = boundary_draw.loadImg_name(depth_directory)
+        (pt2[0, :] > 0, pt2[0, :] <= row, pt2[1, :] > 0,
+            pt2[1, :] <= column))
+    pt21 = pt2[:, ind]
+    pt2_color = facevertexcdata[:, ind]
+    return pt21, pt2_color, ind
 
+
+def test_result(
+    parent_directory, all_image, all_depth, image_index,
+    cx, cy, fx, fy, threshold, rot, tau, rang,
+    dataset_number, plyfile, pt2, pt2_color
+                ):
+    """Test the results use some plots."""
     image_array = boundary_detection_2D.read_to_array(
                                                     all_image[image_index]
-                                                     )
+    )
 
     imagedepth_array = boundary_detection_2D.read_to_array(
                                                     all_depth[image_index]
-                                                           )
+    )
     boundary_image = boundary_detection_2D.detect_boundary(image_array)
     pt3_camera = boundary_draw.calulate_3Dpt(
             boundary_image, imagedepth_array, cx, cy, fx, fy, threshold
-                                        )
+    )
     pt3_world = np.dot(rot, pt3_camera).T + tau
     boundary_draw.test_result(
                 image_array, boundary_image, parent_directory, dataset_number,
                 image_index, rang, plyfile, pt3_camera, pt3_world)
 
     fig = plt.figure()
-    plt.scatter(pt21[1, :], -pt21[0, :], s=0.5, c=pt2_color.T/pt2_color.max())
+    plt.scatter(pt2[1, :], -pt2[0, :], s=0.5, c=pt2_color.T/pt2_color.max())
     ax = fig.gca()
     ax.set_axis_off()
     ax.legend()
     plt.show()
+
+
+def main():
+    """Main function."""
+    [
+        row, column, dataset_number, plyfile, data_directory_name,
+        image_directory_name, depth_directory_name, rang,
+        image_index, cx, cy, fx, fy, threshold
+    ] = boundary_draw.load_allstuff()
+
+    parent_directory, all_image, trajectory = boundary_draw.load_img(
+        data_directory_name, dataset_number, image_directory_name
+                                    )
+    _, all_depth, _ = boundary_draw.load_img(
+        data_directory_name, dataset_number, depth_directory_name
+                        )
+    vertices, facevertexcdata, faces = boundary_draw.load_npy(
+                        parent_directory, dataset_number, image_index, plyfile
+    )
+    # load the trajectory
+    rot, tau = load_trajectory(trajectory, image_index)
+
+    # remove the points wrong direction
+    # camera direction
+    vertices = vertices.T
+    facevertexcdata = facevertexcdata.T
+    pt3_tmp1, facevertexcdata1, index = remove_wrong_direction(
+        rot, vertices, facevertexcdata)
+
+    # map to 2d img
+    pt2tmp1 = map_3dto2d(pt3_tmp1, rot, tau, cx, cy, fx, fy)
+
+    # find the row>=pt2[0]>0, column>=pt2[1]>0
+    pt21, pt2_color, ind = crop_2d(pt2tmp1, facevertexcdata1, row, column)
+
+    return pt21, pt2_color, faces, index, ind
+
+    # # %% test
+    test_result(
+        parent_directory, all_image, all_depth,
+        image_index, cx, cy, fx, fy, threshold, rot, tau, rang,
+        dataset_number, plyfile, pt21, pt2_color)
 
 
 if __name__ == '__main__':

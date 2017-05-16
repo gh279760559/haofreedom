@@ -21,8 +21,39 @@ def build_parser():
         help='Name of json file to load',
         type=str,
         default='parameters.json'
-        )
+    )
     return parser
+
+
+def load_allstuff():
+    """Load all stuff from json file."""
+    args = build_parser().parse_args()
+    assert os.path.isfile(args.filename), (
+        'File {} does not exist!'.format(args.filename)
+    )
+    with open(args.filename) as fd:
+        data = json.load(fd)
+
+    row, column = (
+        data[key] for key in ('row', 'column')
+    )
+
+    dataset_number, plyfile = (
+        data[key] for key in ('dataset_number', 'plyfile')
+    )
+    data_directory_name, image_directory_name, depth_directory_name = (
+        data[key]
+        for key in ('data_directory', 'image_directory', 'depth_directory')
+    )
+    rang, image_index = (data[key] for key in ('rang', 'image_index'))
+    cx, cy, fx, fy = (data[key] for key in ('cx', 'cy', 'fx', 'fy'))
+    threshold = data['t']
+
+    return [
+        row, column, dataset_number, plyfile, data_directory_name,
+        image_directory_name, depth_directory_name, rang, image_index,
+        cx, cy, fx, fy, threshold
+        ]
 
 
 def line_to_list_of_float(line):
@@ -40,7 +71,7 @@ def get_trajectory(parent_directory):
     return trajectory
 
 
-def loadImg_name(image_directory):
+def load_imagename(image_directory):
     """Load all imgs from the directory."""
     all_img = [os.path.join(image_directory, file)
                for file in sorted(os.listdir(image_directory))
@@ -52,7 +83,7 @@ def calulate_3Dpt(pt2D, ptd, cx, cy, fx, fy, threshold):
     """
     3d pts and depth point calculation.
 
-    Keyword arguments:
+    Arguments:
     pt2D 2 by N 2D points;
     ptd is the corresponding depth map;
     cx, cy, fx, fy are the intrinsic parameters.
@@ -78,15 +109,16 @@ def load_npy(parent_directory, dataset_number, image_index, plyfile):
         np.save(os.path.join(parent_directory, filename), plydata)
     x, y, z, r, g, b = (plydata[0].data[key]
                         for key in ('x', 'y', 'z', 'red', 'green', 'blue'))
+    vertex_index = plydata[1].data['vertex_indices']
     vertices = np.column_stack((x, y, z))
     rgb = np.column_stack((r, g, b))
-    return vertices, rgb
+    vertex_index = np.row_stack(vertex_index)
+    return vertices, rgb, vertex_index
 
 
 def test_result(image_array, boundary_image, parent_directory, dataset_number,
                 image_index, rang, plyfile, pt3_camera, pt3_world):
     """Test results."""
-    # %% test
     # show the image
     boundary_detection_2D.image_show(image_array)
     # show the boundary img
@@ -94,15 +126,16 @@ def test_result(image_array, boundary_image, parent_directory, dataset_number,
     boundary.show()
 
     # save it
-    filename = '{}.mat'.format('boundary' + str(image_index))
+    filename = 'boundary{}.mat'.format(str(image_index))
     npyfile = Path(os.path.join(parent_directory, filename))
     if npyfile.is_file() is False:
         scipy.io.savemat(
             os.path.join(parent_directory, filename),
             {'boundary_image': boundary_image})
-    vertices, rgb = load_npy(
+
+    vertices, rgb, _ = load_npy(
                     parent_directory, dataset_number, image_index, plyfile
-                            )
+    )
     vertices = vertices[::rang, :]
     rgb = rgb[::rang, :] / 255
 
@@ -110,7 +143,7 @@ def test_result(image_array, boundary_image, parent_directory, dataset_number,
     ax = fig.gca(projection='3d')
     ax.plot(
         pt3_camera[0, :], pt3_camera[1, :], pt3_camera[2, :], '.b', ms='0.5'
-           )
+    )
     plt.show()
 
     fig = plt.figure()
@@ -120,49 +153,58 @@ def test_result(image_array, boundary_image, parent_directory, dataset_number,
     plt.hold(True)
     ax.scatter(pt3_world[:, 0], pt3_world[:, 1], pt3_world[:, 2],
                facecolor='0', s=2)
-    # ax.plot(
-    #     pt3_camera[:, 0], pt3_camera[:, 1], pt3_camera[:, 2], '.b', ms='0.5'
-    #        )
     ax.set_axis_off()
     plt.show()
 
 
-def main():
-    """Main function."""
-    args = build_parser().parse_args()
-    assert os.path.isfile(args.filename), (
-        'File {} does not exist!'.format(args.filename)
-    )
-    with open(args.filename) as fd:
-        data = json.load(fd)
-
-    dataset_number, plyfile = (
-        data[key] for key in ('dataset_number', 'plyfile')
-        )
-    data_directory, image_directory, depth_directory = (
-        data[key]
-        for key in ('data_directory', 'image_directory', 'depth_directory')
-        )
-    rang, image_index = (data[key] for key in ('rang', 'image_index'))
-    cx, cy, fx, fy = (data[key] for key in ('cx', 'cy', 'fx', 'fy'))
-    threshold = data['t']
-
+def load_img(data_directory_name, dataset_number, image_directory_name):
+    """Load all image lists from the directory."""
     upper_directory = os.path.abspath(os.path.join(os.getcwd(), os.pardir))
     parent_directory = os.path.join(
-                            upper_directory, data_directory, dataset_number
-                            )
-    image_directory = os.path.join(parent_directory, image_directory)
-    depth_directory = os.path.join(parent_directory, depth_directory)
+                    upper_directory, data_directory_name, dataset_number
+                                    )
+    image_directory = os.path.join(parent_directory, image_directory_name)
+    all_image = load_imagename(image_directory)
     trajectory = get_trajectory(parent_directory)
-    all_image = loadImg_name(image_directory)
-    all_depth = loadImg_name(depth_directory)
+    return parent_directory, all_image, trajectory
+
+
+def pt3_camera2world(pt3_camera, rot, tau):
+    """Apply the camera matrix to pt3_camera."""
+    return np.dot(rot, pt3_camera).T + tau
+
+
+def get_rotation_translation(camera_matrix):
+    """
+    Return the rotation and translation from the camera matrix.
+
+    Arguments: camera_matrix 3x4.
+    """
+    return camera_matrix[:, 0:3], camera_matrix[:, 3]
+
+
+def main():
+    """Main function."""
+    [
+        _, _, dataset_number, plyfile, data_directory_name,
+        image_directory_name, depth_directory_name, rang,
+        image_index, cx, cy, fx, fy, threshold
+    ] = load_allstuff()
+
+    parent_directory, all_image, trajectory = load_img(
+        data_directory_name, dataset_number, image_directory_name
+                                    )
+    _, all_depth, _ = load_img(
+        data_directory_name, dataset_number, depth_directory_name
+                        )
     # %% 3D points calculation from the boundary image
     # load and array the image
     image_array = boundary_detection_2D.read_to_array(
                                                     all_image[image_index]
-                                                     )
+                                                    )
     imagedepth_array = boundary_detection_2D.read_to_array(
-                       all_depth[image_index])
+                                                    all_depth[image_index]
+                                                    )
     # use server method SE/HED to get the segment image
     boundary_image = boundary_detection_2D.detect_boundary(image_array)
     # load the trajectory
@@ -175,10 +217,12 @@ def main():
                               )
 
     # Now apply the camera matrix
-    pt3_world = np.dot(
-                camera_matrix[:, 0:3], pt3_camera).T + camera_matrix[:, 3]
+    rotation, translation = get_rotation_translation(camera_matrix)
+    pt3_world = pt3_camera2world(pt3_camera, rotation, translation)
+
     test_result(image_array, boundary_image, parent_directory, dataset_number,
-                image_index, rang, plyfile, pt3_camera, pt3_world)
+                image_index, rang, plyfile, pt3_camera, pt3_world
+                )
 
 
 if __name__ == '__main__':

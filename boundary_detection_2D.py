@@ -52,7 +52,6 @@ def image_show(image_array):
 
 def build_parser():
     """Input arguments."""
-    # __doc__ automatically contains the docstring for the file.
     parser = argparse.ArgumentParser(description=__doc__)
 
     parser.add_argument(

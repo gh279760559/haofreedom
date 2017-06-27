@@ -3,13 +3,12 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import boundary_detection_2D
-import boundary_draw
+import world_points_cal
 
 
 # map 3 to 2
-def map_pt3to_image(pt3, cx, cy, fx, fy):
-    """
-    Use to map the 3D pt to 2D img.
+def map_3d_camera_to2d(pt3, cx, cy, fx, fy):
+    """Map the 3D camera coordinate pts to 2D img.
 
     Arguments:
     pt3 3 by N 3d points;
@@ -52,11 +51,11 @@ def remove_wrong_direction(camera_rot, vertices, facevertexcdata):
     return pt3_infront, face_color, index
 
 
-def map_3dto2d(pt3, rotate, transform, cx, cy, fx, fy):
-    """Map the 3D points to 2D image."""
+def map_3d_world_to2d(pt3, rotate, transform, cx, cy, fx, fy):
+    """Map the 3D world coordinate points to 2D image."""
     taus = np.tile(transform, (pt3.shape[1], 1))
     pt3_tmp2, _, _, _ = np.linalg.lstsq(rotate, pt3-taus.T)
-    pt2 = map_pt3to_image(pt3_tmp2, cx, cy, fx, fy)
+    pt2 = map_3d_camera_to2d(pt3_tmp2, cx, cy, fx, fy)
     return pt2
 
 
@@ -87,13 +86,13 @@ def test_result(
 
     # to do the boundary calculation and 3D world pts computation.
     boundary_image = boundary_detection_2D.detect_boundary(image_array)
-    pt3_camera = boundary_draw.calulate_3Dpt(
+    pt3_camera = world_points_cal.calulate_3Dpt(
             boundary_image, imagedepth_array, cx, cy, fx, fy, threshold
     )
     pt3_world = np.dot(rot, pt3_camera).T + tau
 
     # draw the results.
-    boundary_draw.test_result(
+    world_points_cal.test_result(
                 image_array, boundary_image, parent_directory, dataset_number,
                 image_index, rang, plyfile, pt3_camera, pt3_world)
 
@@ -130,13 +129,13 @@ def main():
     cx, cy, fx, fy = (config['cx'], config['cy'], config['fx'], config['fy'])
     threshold = config['t']
 
-    parent_directory, all_image, trajectory = boundary_draw.load_img(
+    parent_directory, all_image, trajectory = world_points_cal.load_img(
         data_directory_name, dataset_number, image_directory_name
                                     )
-    _, all_depth, _ = boundary_draw.load_img(
+    _, all_depth, _ = world_points_cal.load_img(
         data_directory_name, dataset_number, depth_directory_name
                         )
-    vertices, facevertexcdata, faces = boundary_draw.load_npy(
+    vertices, facevertexcdata, faces = world_points_cal.load_npy(
                         parent_directory, dataset_number, image_index, plyfile
     )
     # load the trajectory

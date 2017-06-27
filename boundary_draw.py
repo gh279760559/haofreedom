@@ -25,37 +25,6 @@ def build_parser():
     return parser
 
 
-def load_allstuff():
-    """Load all stuff from json file."""
-    args = build_parser().parse_args()
-    assert os.path.isfile(args.filename), (
-        'File {} does not exist!'.format(args.filename)
-    )
-    with open(args.filename) as fd:
-        data = json.load(fd)
-
-    row, column = (
-        data[key] for key in ('row', 'column')
-    )
-
-    dataset_number, plyfile = (
-        data[key] for key in ('dataset_number', 'plyfile')
-    )
-    data_directory_name, image_directory_name, depth_directory_name = (
-        data[key]
-        for key in ('data_directory', 'image_directory', 'depth_directory')
-    )
-    rang, image_index = (data[key] for key in ('rang', 'image_index'))
-    cx, cy, fx, fy = (data[key] for key in ('cx', 'cy', 'fx', 'fy'))
-    threshold = data['t']
-
-    return [
-        row, column, dataset_number, plyfile, data_directory_name,
-        image_directory_name, depth_directory_name, rang, image_index,
-        cx, cy, fx, fy, threshold
-        ]
-
-
 def line_to_list_of_float(line):
     """Split the line and return each value."""
     return [float(value) for value in line.split()]
@@ -71,7 +40,7 @@ def get_trajectory(parent_directory):
     return trajectory
 
 
-def load_imagename(image_directory):
+def get_img_list(image_directory):
     """Load all imgs from the directory."""
     all_img = [os.path.join(image_directory, file)
                for file in sorted(os.listdir(image_directory))
@@ -164,7 +133,7 @@ def load_img(data_directory_name, dataset_number, image_directory_name):
                     upper_directory, data_directory_name, dataset_number
                                     )
     image_directory = os.path.join(parent_directory, image_directory_name)
-    all_image = load_imagename(image_directory)
+    all_image = get_img_list(image_directory)
     trajectory = get_trajectory(parent_directory)
     return parent_directory, all_image, trajectory
 
@@ -185,26 +154,39 @@ def get_rotation_translation(camera_matrix):
 
 def main():
     """Main function."""
-    [
-        _, _, dataset_number, plyfile, data_directory_name,
-        image_directory_name, depth_directory_name, rang,
-        image_index, cx, cy, fx, fy, threshold
-    ] = load_allstuff()
+    args = build_parser().parse_args()
+    assert os.path.isfile(args.filename), (
+        'File {} does not exist!'.format(args.filename)
+    )
+    with open(args.filename) as fd:
+        config = json.load(fd)
+
+    dataset_number, plyfile = (
+        config['dataset_number'],  config['plyfile']
+    )
+
+    data_directory_name, image_directory_name, depth_directory_name = (
+        config['data_directory'], config['image_directory'],
+        config['depth_directory']
+    )
+    rang, image_index = (config['rang'], config['image_index'])
+    cx, cy, fx, fy = (config['cx'], config['cy'], config['fx'], config['fy'])
+    threshold = config['t']
 
     parent_directory, all_image, trajectory = load_img(
         data_directory_name, dataset_number, image_directory_name
-                                    )
+    )
     _, all_depth, _ = load_img(
         data_directory_name, dataset_number, depth_directory_name
-                        )
+    )
     # %% 3D points calculation from the boundary image
     # load and array the image
     image_array = boundary_detection_2D.read_to_array(
                                                     all_image[image_index]
-                                                    )
+    )
     imagedepth_array = boundary_detection_2D.read_to_array(
                                                     all_depth[image_index]
-                                                    )
+    )
     # use server method SE/HED to get the segment image
     boundary_image = boundary_detection_2D.detect_boundary(image_array)
     # load the trajectory
@@ -214,7 +196,7 @@ def main():
     # Now apply the depth to the 3d point
     pt3_camera = calulate_3Dpt(
             boundary_image, imagedepth_array, cx, cy, fx, fy, threshold
-                              )
+    )
 
     # Now apply the camera matrix
     rotation, translation = get_rotation_translation(camera_matrix)
@@ -222,7 +204,7 @@ def main():
 
     test_result(image_array, boundary_image, parent_directory, dataset_number,
                 image_index, rang, plyfile, pt3_camera, pt3_world
-                )
+    )
 
 
 if __name__ == '__main__':

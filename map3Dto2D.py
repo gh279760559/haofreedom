@@ -76,6 +76,7 @@ def test_result(
     dataset_number, plyfile, pt2, pt2_color
                 ):
     """Test the results use some plots."""
+    # this part is trying to load all data.
     image_array = boundary_detection_2D.read_to_array(
                                                     all_image[image_index]
     )
@@ -83,11 +84,15 @@ def test_result(
     imagedepth_array = boundary_detection_2D.read_to_array(
                                                     all_depth[image_index]
     )
+
+    # to do the boundary calculation and 3D world pts computation.
     boundary_image = boundary_detection_2D.detect_boundary(image_array)
     pt3_camera = boundary_draw.calulate_3Dpt(
             boundary_image, imagedepth_array, cx, cy, fx, fy, threshold
     )
     pt3_world = np.dot(rot, pt3_camera).T + tau
+
+    # draw the results.
     boundary_draw.test_result(
                 image_array, boundary_image, parent_directory, dataset_number,
                 image_index, rang, plyfile, pt3_camera, pt3_world)
@@ -102,11 +107,28 @@ def test_result(
 
 def main():
     """Main function."""
-    [
-        row, column, dataset_number, plyfile, data_directory_name,
-        image_directory_name, depth_directory_name, rang,
-        image_index, cx, cy, fx, fy, threshold
-    ] = boundary_draw.load_allstuff()
+    args = build_parser().parse_args()
+    assert os.path.isfile(args.filename), (
+        'File {} does not exist!'.format(args.filename)
+    )
+    with open(args.filename) as fd:
+        config = json.load(fd)
+
+    row, column = (
+        config['row'], config['column']
+    )
+
+    dataset_number, plyfile = (
+        config['dataset_number'],  config['plyfile']
+    )
+
+    data_directory_name, image_directory_name, depth_directory_name = (
+        config['data_directory'], config['image_directory'],
+        config['depth_directory']
+    )
+    rang, image_index = (config['rang'], config['image_index'])
+    cx, cy, fx, fy = (config['cx'], config['cy'], config['fx'], config['fy'])
+    threshold = config['t']
 
     parent_directory, all_image, trajectory = boundary_draw.load_img(
         data_directory_name, dataset_number, image_directory_name

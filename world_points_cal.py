@@ -1,4 +1,4 @@
-"""The 2D edge detection using our own method."""
+"""The 3D world coordinate points calculation."""
 
 from PIL import Image
 import numpy as np

@@ -46,7 +46,8 @@ def image_show(image_array):
 
     No return.
     """
-    boundary_show = Image.fromarray(image_array * 255)  # 0-1
+    # change from the range 0-1 to 0-255 for display.
+    boundary_show = Image.fromarray(image_array * 255)
     boundary_show.show()
 
 

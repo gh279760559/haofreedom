@@ -28,11 +28,6 @@ def detect_boundary(image_array):
     Return: the boundary image.
     """
     boundary_tuple = segment_image(image_array)
-    # Generally use brackets to get values out of dictionaries.
-    # i.e. boundary_tuple[1]['boundary_image'].
-    # Doing that will throw an exception if the key is not present
-    # (specifically a KeyError), whereas get will return None,
-    # and may be harder to debug.
     boundary_image_dic = boundary_tuple[1]['boundary_image']
     boundary_image = utilities.image_string_to_numpy(boundary_image_dic[1])
     return boundary_image

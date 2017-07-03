@@ -7,10 +7,11 @@ import map3Dto2D
 def set_values_found_to_index(matrix_original, values_to_find):
     """Set value found to index."""
     temp = ~np.in1d(
-        matrix_original, values_to_find).reshape(matrix_original.shape)
+        matrix_original, values_to_find
+    ).reshape(matrix_original.shape)
     matrix_output = np.searchsorted(
         values_to_find, matrix_original[~np.any(temp, axis=1), :]
-        )
+    )
 
     return matrix_output
 

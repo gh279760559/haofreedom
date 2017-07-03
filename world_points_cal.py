@@ -34,17 +34,23 @@ def get_trajectory(parent_directory):
     """Compute the trajectory."""
     with open(os.path.join(parent_directory, 'trajectory.log'), "r") as f:
         lines = f.read().splitlines()
-    trajectory = np.array([line_to_list_of_float(line)
-                          for index, line in enumerate(lines)
-                          if index % 5])
+    trajectory = np.array(
+        [
+            line_to_list_of_float(line)
+            for index, line in enumerate(lines)
+            if index % 5
+        ]
+    )
     return trajectory
 
 
 def get_img_list(image_directory):
     """Load all imgs from the directory."""
-    all_img = [os.path.join(image_directory, file)
-               for file in sorted(os.listdir(image_directory))
-               if os.path.splitext(file)[1] == '.png']
+    all_img = [
+        os.path.join(image_directory, file)
+        for file in sorted(os.listdir(image_directory))
+        if os.path.splitext(file)[1] == '.png'
+    ]
     return all_img
 
 
@@ -76,8 +82,11 @@ def load_npy(parent_directory, dataset_number, image_index, plyfile):
     else:
         plydata = PlyData.read(os.path.join(parent_directory, plyfile))
         np.save(os.path.join(parent_directory, filename), plydata)
-    x, y, z, r, g, b = (plydata[0].data[key]
-                        for key in ('x', 'y', 'z', 'red', 'green', 'blue'))
+
+    x, y, z, r, g, b = (
+        plydata[0].data[key]
+        for key in ('x', 'y', 'z', 'red', 'green', 'blue')
+    )
     vertex_index = plydata[1].data['vertex_indices']
     vertices = np.column_stack((x, y, z))
     rgb = np.column_stack((r, g, b))
@@ -100,7 +109,8 @@ def test_result(image_array, boundary_image, parent_directory, dataset_number,
     if npyfile.is_file() is False:
         scipy.io.savemat(
             os.path.join(parent_directory, filename),
-            {'boundary_image': boundary_image})
+            {'boundary_image': boundary_image}
+        )
 
     vertices, rgb, _ = load_npy(
                     parent_directory, dataset_number, image_index, plyfile
@@ -120,8 +130,10 @@ def test_result(image_array, boundary_image, parent_directory, dataset_number,
     ax.scatter(vertices[:, 0], vertices[:, 1], vertices[:, 2], s=0.5, c=rgb)
     plt.show()
     plt.hold(True)
-    ax.scatter(pt3_world[:, 0], pt3_world[:, 1], pt3_world[:, 2],
-               facecolor='0', s=2)
+    ax.scatter(
+        pt3_world[:, 0], pt3_world[:, 1], pt3_world[:, 2],
+        facecolor='0', s=2
+    )
     ax.set_axis_off()
     plt.show()
 
@@ -130,8 +142,8 @@ def load_img(data_directory_name, dataset_number, image_directory_name):
     """Load all image lists from the directory."""
     upper_directory = os.path.abspath(os.path.join(os.getcwd(), os.pardir))
     parent_directory = os.path.join(
-                    upper_directory, data_directory_name, dataset_number
-                                    )
+        upper_directory, data_directory_name, dataset_number
+    )
     image_directory = os.path.join(parent_directory, image_directory_name)
     all_image = get_img_list(image_directory)
     trajectory = get_trajectory(parent_directory)
@@ -182,10 +194,10 @@ def main():
     # %% 3D points calculation from the boundary image
     # load and array the image
     image_array = boundary_detection_2D.read_to_array(
-                                                    all_image[image_index]
+        all_image[image_index]
     )
     imagedepth_array = boundary_detection_2D.read_to_array(
-                                                    all_depth[image_index]
+        all_depth[image_index]
     )
     # use server method SE/HED to get the segment image
     boundary_image = boundary_detection_2D.detect_boundary(image_array)
@@ -202,8 +214,9 @@ def main():
     rotation, translation = get_rotation_translation(camera_matrix)
     pt3_world = pt3_camera2world(pt3_camera, rotation, translation)
 
-    test_result(image_array, boundary_image, parent_directory, dataset_number,
-                image_index, rang, plyfile, pt3_camera, pt3_world
+    test_result(
+        image_array, boundary_image, parent_directory, dataset_number,
+        image_index, rang, plyfile, pt3_camera, pt3_world
     )
 
 

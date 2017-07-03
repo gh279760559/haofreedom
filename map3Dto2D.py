@@ -4,6 +4,22 @@ import numpy as np
 import matplotlib.pyplot as plt
 import boundary_detection_2D
 import world_points_cal
+import argparse
+import json
+import os
+
+
+def build_parser():
+    """Input arguments."""
+    parser = argparse.ArgumentParser(description=__doc__)
+
+    parser.add_argument(
+        '-f', '--filename',
+        help='Name of json file to load',
+        type=str,
+        default='parameters.json'
+    )
+    return parser
 
 
 # map 3 to 2
@@ -63,38 +79,39 @@ def crop_2d(pt2, facevertexcdata, row, column):
     """Crop the mapped 2D point so that it is in the image."""
     ind = np.logical_and.reduce(
         (pt2[0, :] > 0, pt2[0, :] <= row, pt2[1, :] > 0,
-            pt2[1, :] <= column))
+            pt2[1, :] <= column)
+    )
     pt21 = pt2[:, ind]
     pt2_color = facevertexcdata[:, ind]
     return pt21, pt2_color, ind
 
 
 def test_result(
-    parent_directory, all_image, all_depth, image_index,
-    cx, cy, fx, fy, threshold, rot, tau, rang,
-    dataset_number, plyfile, pt2, pt2_color
-                ):
+        parent_directory, all_image, all_depth, image_index,
+        cx, cy, fx, fy, threshold, rot, tau, rang,
+        dataset_number, plyfile, pt2, pt2_color):
     """Test the results use some plots."""
     # this part is trying to load all data.
     image_array = boundary_detection_2D.read_to_array(
-                                                    all_image[image_index]
+        all_image[image_index]
     )
 
     imagedepth_array = boundary_detection_2D.read_to_array(
-                                                    all_depth[image_index]
+        all_depth[image_index]
     )
 
     # to do the boundary calculation and 3D world pts computation.
     boundary_image = boundary_detection_2D.detect_boundary(image_array)
     pt3_camera = world_points_cal.calulate_3Dpt(
-            boundary_image, imagedepth_array, cx, cy, fx, fy, threshold
+        boundary_image, imagedepth_array, cx, cy, fx, fy, threshold
     )
     pt3_world = np.dot(rot, pt3_camera).T + tau
 
     # draw the results.
     world_points_cal.test_result(
-                image_array, boundary_image, parent_directory, dataset_number,
-                image_index, rang, plyfile, pt3_camera, pt3_world)
+        image_array, boundary_image, parent_directory, dataset_number,
+        image_index, rang, plyfile, pt3_camera, pt3_world
+    )
 
     fig = plt.figure()
     plt.scatter(pt2[1, :], -pt2[0, :], s=0.5, c=pt2_color.T/pt2_color.max())
@@ -131,10 +148,10 @@ def main():
 
     parent_directory, all_image, trajectory = world_points_cal.load_img(
         data_directory_name, dataset_number, image_directory_name
-                                    )
+    )
     _, all_depth, _ = world_points_cal.load_img(
         data_directory_name, dataset_number, depth_directory_name
-                        )
+    )
     vertices, facevertexcdata, faces = world_points_cal.load_npy(
                         parent_directory, dataset_number, image_index, plyfile
     )
@@ -146,10 +163,11 @@ def main():
     vertices = vertices.T
     facevertexcdata = facevertexcdata.T
     pt3_tmp1, facevertexcdata1, index = remove_wrong_direction(
-        rot, vertices, facevertexcdata)
+        rot, vertices, facevertexcdata
+    )
 
     # map to 2d img
-    pt2tmp1 = map_3dto2d(pt3_tmp1, rot, tau, cx, cy, fx, fy)
+    pt2tmp1 = map_3d_camera_to2d(pt3_tmp1, rot, tau, cx, cy, fx, fy)
 
     # find the row>=pt2[0]>0, column>=pt2[1]>0
     pt21, pt2_color, ind = crop_2d(pt2tmp1, facevertexcdata1, row, column)
@@ -160,7 +178,8 @@ def main():
     test_result(
         parent_directory, all_image, all_depth,
         image_index, cx, cy, fx, fy, threshold, rot, tau, rang,
-        dataset_number, plyfile, pt21, pt2_color)
+        dataset_number, plyfile, pt21, pt2_color
+    )
 
 
 if __name__ == '__main__':

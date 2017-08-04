@@ -1,4 +1,4 @@
-"denseCRF in 3D space."
+"""denseCRF in 3D space."""
 import numpy as np
 # import matplotlib.pyplot as plt
 # import boundary_detection_2D
@@ -11,13 +11,13 @@ from math import floor
 from pathlib import Path
 from scipy.spatial import KDTree
 from sklearn.preprocessing import normalize
-from skimage import color
 from joblib import Parallel, delayed
 import argparse
 import os.path
 import copy
 import time
 import sys
+import random
 import ipdb
 
 
@@ -241,6 +241,112 @@ def generate_empty_list(list_size):
     return tmp
 
 
+def get_init_and_labelled_meshes(prediction, data_obj,
+                                 labels_numeric, n_segs, whether_face):
+    """Name show."""
+    pred_vis = get_visualisation(n_segs, prediction)
+    labelled_data = get_labelled_mesh(data_obj, pred_vis, whether_face)
+
+    init_vis = get_visualisation(n_segs, labels_numeric)
+    init_data = get_labelled_mesh(
+        data_obj, copy.deepcopy(init_vis), whether_face)
+
+    return init_data, labelled_data
+
+
+# Given a face, get the vertices which bound it
+def get_face_vertices(face, vertices):
+    """Get the vertices according to the face."""
+    component_vertex_indices = face['vertex_indices']
+    return list(map(lambda idx: vertices[idx], component_vertex_indices))
+
+
+def get_labelled_mesh(data, labels, whether_face):
+    """Get label mesh."""
+    data = copy.deepcopy(data)
+    vertices = data[0]
+    faces = data[1]
+    channels = ['red', 'green', 'blue']
+    # ipdb.set_trace()
+    if(whether_face == 1):
+        for face_idx, face in enumerate(faces):
+            face_vertices = get_face_vertices(face, vertices)
+            for vert_index in range(0, 2):
+                for channel_idx, channel in enumerate(channels):
+                    face_vertices[vert_index][channel] = floor(
+                        labels[face_idx][channel_idx] * 255
+                    )
+    else:
+        # ipdb.set_trace()
+        for idx in range(len(vertices['red'])):
+            for channel_idx, channel in enumerate(channels):
+                vertices[idx][channel] = floor(
+                    labels[idx][channel_idx] * 255)
+        # for face_idx, face_vertices in enumerate(vertices):
+        #     # face_vertices = get_face_vertices(face, vertices)
+        #     for vert_index in range(7, 9):
+        #         for channel_idx, channel in enumerate(channels):
+        #             ipdb.set_trace()
+        #             face_vertices[vert_index] = floor(
+        #                 labels[face_idx][channel_idx] * 255
+        #             )
+
+    data = PlyData(data)
+    return data
+
+
+def get_visualisation(num_classes, prediction):
+    """visualisation."""
+    colours_for_vis = get_n_linear_colours_rgb(num_classes)
+    return list(map(lambda i: colours_for_vis[i], prediction))
+
+
+def get_n_linear_colours_rgb(n):
+    """Get n linear spaced rgb colours (for label visualisation)."""
+    # Evenly spaces hues
+    hues = np.linspace(0, 1, n + 1)
+
+    # Saturation and value at full
+    pad_s_v = np.ones(n + 1)
+
+    # Concatenate and reshape to form swatch image
+    padded = np.stack((hues, pad_s_v, pad_s_v))
+    hsv = padded[..., None].T
+
+    # Convert swatch image to RGB
+    rgb = color.hsv2rgb(hsv).squeeze()[:n, :]
+
+    # Squeeze to list of rgb values
+    return rgb
+
+
+def save_to_ply(
+        prediction, data_obj, labels_numeric, use_face, paras,
+        ):
+    """Save results as ply file."""
+    init_data, labelled_data = get_init_and_labelled_meshes(
+        prediction, data_obj, labels_numeric, args.n_segs, use_face
+    )
+
+    print_this = [paras['posi_weight'], paras['normal_weight'],
+                  paras['color_weight'],
+                  paras['gaussian_weight']]
+    filename = os.path.basename(args.mesh_filepath)
+    stamp = str(int(time.time()))
+    out_filename = '{}_crf_{}_{}_{}.ply'.format(
+        os.path.splitext(filename)[0], stamp, args.n_segs, print_this
+    )
+    # ipdb.set_trace()
+    labelled_data.write(os.path.join(args.output_path, out_filename))
+    print('Written {}'.format(out_filename))
+
+    out_filename = '{}_init_{}_{}_{}.ply'.format(
+        os.path.splitext(filename)[0], stamp, args.n_segs, print_this
+    )
+    init_data.write(os.path.join(args.output_path, out_filename))
+    print('Written {}'.format(out_filename))
+
+
 def main(args):
     """Main function."""
     if not os.path.exists(args.output_path):
@@ -251,7 +357,7 @@ def main(args):
     # 093
     simulating_point_index.append([972119, 975828, 1140442, 491021, 1204595])
     # 207
-    simulating_point_index.append([313301, 587101, 948647, 733043, 367594])
+    # simulating_point_index.append([313301, 587101, 948647, 733043, 367594])
     # can add more
     # simulating_point_index.append
     # simulating_point_index.append
@@ -332,6 +438,8 @@ def main(args):
                         args.output_path, out_filename1), indx=indx_gt)
 
     # possibly normalize the features?
+
+    # get face_num
     face_num = np.array([])
     for i in range(dataset_numbers):
         if (len(positions[i]) == len(colors[i]) == len(normals[i])):
@@ -346,27 +454,22 @@ def main(args):
 
     print("get simulated labels...")
 
-    # indx = generate_empty_list(dataset_numbers)
-    Unary = generate_empty_list(dataset_numbers)
-    for i in range(dataset_numbers):
-        for j in range(len(simulating_point_index[i])):
-            import random
-            picked_val = random.choice(indx_gt[i][j])
-            labels, labels_numeric = label_simulation_area(
-                face_num[i].astype(np.int), picked_val,
-                args.n_segs)
-            Unary[i].append(labels.astype(np.float32))
-
     print("Now tuning...")
     # ipdb.set_trace()
-    loop_time = 1000
+    loop_time = 2
     satisfied_percentage = 0.9
     eval_result = 0
-    loop_indx = 1
+    loop_indx = 0
     score = np.array([])
     paras = np.array([])
+    # this setting is a tricky thing
+    # want to stop the running and save the results by
+    # manually change the argument
     debug = False
-    while eval_result < satisfied_percentage or loop_indx < loop_time:
+    prediction = generate_empty_list(loop_time)
+    # Unary = generate_empty_list(dataset_numbers)
+    labels_numeric = generate_empty_list(loop_time)
+    while eval_result < satisfied_percentage and loop_indx < loop_time:
         # can be improved using parralle joblib
         # n_segs = args.n_segs
         # parallelise = Parallel(8)
@@ -377,27 +480,34 @@ def main(args):
         # ) for j in range(len(simulating_point_index)))
         # tmp = parallelise(task_it)
         # paras_tmp1, prediction_tmp1 = zip(*tmp)
-        score = generate_empty_list(dataset_numbers)
-        detected_indx = generate_empty_list(dataset_numbers)
-        paras = get_random_params()
-        print('Now we start the loop {}'.format(loop_indx))
+        # ipdb.set_trace()
+        paras_tmp = get_random_params()
+        score_tmp1 = generate_empty_list(dataset_numbers)
+        print("totally {} data".format(dataset_numbers))
         for i in range(dataset_numbers):
+            print('Now we start the data {} in loop {}'.format(i+1, loop_indx))
             for j in range(len(simulating_point_index[i])):
+                picked_val = random.choice(indx_gt[i][j])
+                labels, labels_numeric_tmp = label_simulation_area(
+                    face_num[i].astype(np.int), picked_val,
+                    args.n_segs)
+                Unary = labels.astype(np.float32)
                 prediction_tmp = eval_para(
-                    Unary[i][j], face_num[i].astype(np.int),
-                    paras, args.n_segs,
+                    Unary, face_num[i].astype(np.int),
+                    paras_tmp, args.n_segs,
                     positions[i], normals[i], colors[i],
                     bilateral_weight, whether_use_bilateral)
-                score_tmp, detected_indx_tmp = score_get(
+                score_tmp, _ = score_get(
                     prediction_tmp, indx_gt[i][j])
-                score[i].append(score_tmp)
-                detected_indx[i].append(detected_indx_tmp)
-        ipdb.set_trace()
-        score_avg = np.mean(score)
+                # ipdb.set_trace()
+                score_tmp1[i].append(score_tmp)
+                prediction[loop_indx].append(prediction_tmp)
+                labels_numeric[loop_indx].append(labels_numeric_tmp)
+        score_avg = np.mean(score_tmp1)
         print("the score is {}".format(score_avg))
-        print("the paras is {}".format(paras))
+        print("the paras is {}".format(paras_tmp))
         score = np.append(score, score_avg)
-        paras = np.append(paras, paras)
+        paras = np.append(paras, paras_tmp)
         if(debug):
             saved_name = 'results_{}'.format(
                 simulating_point_index
@@ -408,6 +518,29 @@ def main(args):
             np.save(saved_name, score)
             np.save(saved_name1, paras)
         loop_indx += 1
+
+    print('now save the scores and paras...')
+    saved_name = 'results_{}'.format(
+        simulating_point_index
+    )
+    saved_name1 = 'resultsParas_{}'.format(
+        simulating_point_index
+    )
+    np.save(saved_name, score)
+    np.save(saved_name1, paras)
+    # ipdb.set_trace()
+    # print('visulisations...')
+    # indx_tmp = np.argmax(score)
+    # ind = 0
+    # ipdb.set_trace()
+    # for i in range(dataset_numbers):
+    #     for j in range(len(simulating_point_index[i])):
+    #         save_to_ply(
+    #                 prediction[indx_tmp][ind], data_obj,
+    #                 labels_numeric[indx_tmp][ind],
+    #                 0, paras[indx_tmp],
+    #                 )
+    #         ind += ind
 
 
 if __name__ == '__main__':

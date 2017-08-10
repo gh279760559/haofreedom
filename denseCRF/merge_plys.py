@@ -60,7 +60,7 @@ def merge_ply(mesh_file1_path, mesh_file2_path):
         )
         out_filename = os.path.join(args.output_path, out_filename_tmp)
         print("writing to ply...")
-        plydata.write(out_filename)
+        plydata1.write(out_filename)
     else:
         sys.exit("****Check the -m files after!****")
 

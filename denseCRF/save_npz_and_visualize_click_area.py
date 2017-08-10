@@ -7,6 +7,7 @@ import argparse
 import os.path
 import copy
 import sys
+import ipdb
 
 
 def build_parser():
@@ -40,10 +41,9 @@ def build_parser():
     )
 
     parser.add_argument(
-        '--debug',
-        help='Print additional debugging information.',
-        dest='debug',
-        action='store_true',
+        '--p',
+        help='Whether save as ply.',
+        dest='whether_saveply',
         default=False
     )
 
@@ -58,6 +58,7 @@ def load_npz(mesh_filepath, if_test):
     directories = os.path.dirname(os.path.realpath(mesh_filepath))
     npyfile = Path(directories + '/' + filename_no_format + '.npz')
     if npyfile.is_file():
+        print('the mesh NPY format exists, now loading...')
         # read the ply file
         npzfile = np.load(npyfile)
         vertices_pos = npzfile['vertices']
@@ -87,7 +88,10 @@ def load_npz(mesh_filepath, if_test):
                                         for key in ('x', 'y', 'z',
                                                     'red', 'green', 'blue',
                                                     'nx', 'ny', 'nz'))
-        label = plydata['vertex'].data['scalar_alpha']
+        # if use CloudCompare do this,
+        # label = plydata['vertex'].data['scalar_alpha']
+        # else do this
+        label = plydata['vertex'].data['label']
         vertices_pos = np.column_stack((x, y, z))
         vertices_normals = np.column_stack((nx, ny, nz))
         vertices_color = np.column_stack((r, g, b))
@@ -127,12 +131,15 @@ def main(args):
     simulating_point_index = []
     # 093
     # simulating_point_index.append([972119, 975828, 1140442, 491021, 1204595])
-    simulating_point_index.append([69070])
     # 207
-    simulating_point_index.append([136099, 101948])
     # simulating_point_index.append([313301, 587101, 948647, 733043, 367594])
+    # 207-cut_version:try.ply
+    simulating_point_index.append([69070])
+    # 207-cut_version:111.ply
+    # simulating_point_index.append([136099, 101948])
     # can add more
-    simulating_point_index.append([30052])
+    # 207-density_reduced_version:112.ply
+    # simulating_point_index.append([30052])
     # simulating_point_index.append
     # simulating_point_index.append
     # simulating_point_index.append
@@ -159,7 +166,6 @@ def main(args):
             positions.append(positions_tmp)
             colors.append(colors_tmp)
             normals.append(normals_tmp)
-
             data_obj.append(dataobj_tmp)
 
     print('now get the groundtruth labelling...')
@@ -172,15 +178,13 @@ def main(args):
                 label_color[i], simulating_point_index[i][j])
 
             indx_gt[i].append(indx_tmp)
-
     # test by change the color to black and save as ply file
-    if(if_test):
+    if(args.whether_saveply):
         for i in range(dataset_numbers):
             for j in range(len(simulating_point_index[i])):
                 data = copy.deepcopy(data_obj[i])
                 print("testing...")
                 print("set the color value according to index...")
-
                 data['vertex']['red'][indx_gt[i][j]] = 0
                 data['vertex']['green'][indx_gt[i][j]] = 0
                 data['vertex']['blue'][indx_gt[i][j]] = 0
@@ -199,9 +203,10 @@ def main(args):
                 np.savez(
                   os.path.join(
                         args.output_path, out_filename1), indx=indx_gt)
+    return data_obj
 
 
 if __name__ == '__main__':
     args = build_parser().parse_args()
     print(args)
-    main(args)
+    plydata = main(args)

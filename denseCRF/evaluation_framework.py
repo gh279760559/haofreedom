@@ -63,6 +63,7 @@ def load_npz(mesh_filepath, if_test):
     directories = os.path.dirname(os.path.realpath(mesh_filepath))
     npyfile = Path(directories + '/' + filename_no_format + '.npz')
     if npyfile.is_file():
+        print('the mesh NPY format exists, now loading...')
         # read the ply file
         npzfile = np.load(mesh_filepath)
         vertices_pos = npzfile['vertices']

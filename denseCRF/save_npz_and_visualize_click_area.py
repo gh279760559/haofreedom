@@ -41,7 +41,7 @@ def build_parser():
     )
 
     parser.add_argument(
-        '--p',
+        '-p', '--save-ply',
         help='Whether save as ply.',
         dest='whether_saveply',
         default=False

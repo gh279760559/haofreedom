@@ -20,22 +20,23 @@ use `git clone` command to get this on your local machine.
 ## Running the tests
 
 follow the following steps:
+
 1. merge 2 ply files.
-```
-run merge_plys.py -m fullpath/to/ply_file_label ply_file_color -o out_file
-```
+    ```
+    run merge_plys.py -m fullpath/to/ply_file_label ply_file_color -o out_file
+    ```
 
 2. use CloudCompare to manually do 'cut' or 'density reduce'.
 3. use CloudCompare to manually select the point on the object.
 4. put the index numbers in save_npz_and_visualize_click_area.py (in code, easy to find)
 5. run save_npz_and_visualize_click_area.py to save the mesh with the black area in the click point (also include the whole object) into ply file
-```
-run save_npz_and_visualize_click_area.py -i fullpath/to/ply_file -o temp -p True
-```
+      ```
+     run save_npz_and_visualize_click_area.py -i fullpath/to/ply_file -o temp -p True
+     ```
 6. run evaluation_framework.py to start learning parameters.
-```
-run evaluation_framework.py -m fullpath/to/ply_file_label ply_file_color -o out_file
-```
+     ```
+     run evaluation_framework.py -m fullpath/to/ply_file_label ply_file_color -o out_file
+     ```
 
 ## Deployment
 

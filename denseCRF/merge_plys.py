@@ -51,9 +51,9 @@ def merge_ply(mesh_file1_path, mesh_file2_path):
         plydata.write(out_filename)
     elif('label' in plydata1['vertex'].data.dtype.names):
         print("calculating...")
-        plydata['vertex']['red'] = plydata1['vertex']['red']
-        plydata['vertex']['green'] = plydata1['vertex']['green']
-        plydata['vertex']['blue'] = plydata1['vertex']['blue']
+        plydata1['vertex']['red'] = plydata['vertex']['red']
+        plydata1['vertex']['green'] = plydata['vertex']['green']
+        plydata1['vertex']['blue'] = plydata['vertex']['blue']
         filename = os.path.basename(mesh_file2_path)
         out_filename_tmp = '{}_true_color_with_labelling.ply'.format(
             os.path.splitext(filename)[0]

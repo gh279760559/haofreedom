@@ -3,34 +3,25 @@ import numpy as np
 import pydensecrf.densecrf as dcrf
 from plyfile import PlyData
 from skimage import color
-from math import floor
 from pathlib import Path
 import argparse
 import os.path
 import copy
-import time
-import sys
 import random
-import ipdb
+import json
+import xml.etree.ElementTree as etree
+from operator import attrgetter
 
 
 def build_parser():
-    """Some setting."""
+    """Input arguments."""
     parser = argparse.ArgumentParser(description=__doc__)
 
     parser.add_argument(
-        '-i', '--mesh-filepath',
-        nargs='*',
-        help='Ply text file specifying a mesh.',
-        dest='mesh_filepath',
-        required=True
-    )
-
-    parser.add_argument(
-        '-o', '--output-path',
-        help='Output path.',
-        dest='output_path',
-        required=True
+        '-f', '--filename',
+        help='Name of json file to load',
+        type=str,
+        default='parameters.json'
     )
 
     parser.add_argument(
@@ -44,98 +35,121 @@ def build_parser():
         default=2  # Four walls, ceiling, floor.
     )
 
-    parser.add_argument(
-        '--debug',
-        help='Print additional debugging information.',
-        dest='debug',
-        action='store_true',
-        default=False
-    )
-
     return parser
 
 
-def load_npz(mesh_filepath, if_test):
-    """Load the npy file, if not exist will build it."""
+def load_json():
+    """Load all stuff from json file."""
+    args = build_parser().parse_args()
+    assert os.path.isfile(args.filename), (
+        'File {} does not exist!'.format(args.filename)
+    )
+    with open(args.filename) as fd:
+        data = json.load(fd)
+    mesh_filepath = []
+    xml_filepath = []
+    object_num_used = []
+    output_path = []
+    ply_num = len(data)
+    for i in (range(ply_num)):
+        mesh_filepath.append(
+            path_join(data[i]["mesh_path"], data[i]["ply_name"]))
+        xml_filepath.append(
+            path_join(data[i]["mesh_path"], data[i]["xml_name"]))
+        object_num_used.append(data[i]["object_num_used"])
+        output_path.append(data[i]["output_path"])
+    return [
+        mesh_filepath, xml_filepath, output_path, object_num_used, ply_num
+        ]
+
+
+def load_xml(xml_data, object_num_used, if_sorted):
+    """Load xml file and get area and id."""
+    xmlData = etree.parse(xml_data)
+    root = xmlData.getroot()
+    if(if_sorted == 0):
+        for node in root.findall("*"):
+            node[:] = sorted(node, key=attrgetter("area"))
+    label_id = np.array([])
+    for i in range(object_num_used):
+        label_id = np.append(label_id, np.int(root[i].attrib['id']))
+    label_id = label_id.astype(int)
+    return label_id
+
+
+def path_join(*args):
+    """Easy use path join."""
+    return os.path.join(*args)
+
+
+def file_measurement(mesh_filepath):
+    """Some basic file measurement."""
     filename = os.path.basename(mesh_filepath)
     filename_no_format = os.path.splitext(filename)[0]
-    # parent directories
     directories = os.path.dirname(os.path.realpath(mesh_filepath))
-    npyfile = Path(directories + '/' + filename_no_format + '.npz')
-    if npyfile.is_file():
+    npzfile_name = filename_no_format + '.npz'
+    plyfile_name = filename_no_format + '.ply'
+    return [directories, filename_no_format, npzfile_name, plyfile_name]
+
+
+def column_stack(*args):
+    """Easy use np column stack."""
+    return np.column_stack(*args)
+
+
+def load_npz(mesh_filepath, output_path):
+    """Load the npy file, if not exist will build it."""
+    [
+        directories, filename_no_format, npzfile_name, plyfile_name
+        ] = file_measurement(mesh_filepath)
+    npzfile_path = path_join(output_path, npzfile_name)
+    if Path(npzfile_path).is_file():
         print('the mesh NPY format exists, now loading...')
         # read the ply file
-        npzfile = np.load(mesh_filepath)
+        npzfile = np.load(npzfile_path)
         vertices_pos = npzfile['vertices']
         vertices_color = npzfile['rgb']
         vertices_color = color.rgb2lab(
             vertices_color[np.newaxis, ...]).squeeze()
-        # following can be used as well.
-        # vertices_color = 0.21*vertices_color[:, 0] + \
-        #     0.72*vertices_color[:, 1] \
-        #     + 0.07*vertices_color[:, 2]
-        # vertices_color = np.mean(vertices_color, axis=1)
-        # vertices_color = vertices_color[..., np.newaxis]
         vertices_normals = npzfile['vertices_normals']
         label = npzfile['label']
-        if(if_test == 1):
-            plydata = PlyData.read(
-                directories + '/' + filename_no_format+'.ply')
-
+        plydata = PlyData.read(
+            path_join(directories, plyfile_name))
     else:
         print('the mesh NPY format not exist, now load ply and save')
 
-        plydata = PlyData.read(directories + '/' + filename_no_format+'.ply')
-
-        x, y, z, r, g, b, nx, ny, nz = (plydata['vertex'].data[key]
-                                        for key in ('x', 'y', 'z',
-                                                    'red', 'green', 'blue',
-                                                    'nx', 'ny', 'nz'))
-        label = plydata['vertex'].data['scalar_alpha']
-        vertices_pos = np.column_stack((x, y, z))
-        vertices_normals = np.column_stack((nx, ny, nz))
-        vertices_color = np.column_stack((r, g, b))
-        saved_name = directories + '/' + filename_no_format + '.npz'
-
+        plydata = PlyData.read(path_join(directories, plyfile_name))
+        if("label" in plydata['vertex'].data.dtype.names):
+            label = plydata['vertex'].data['label']
+        else:
+            print("the ply is modified version (not from sceneNN\n" +
+                  "check what is the data name of label saved\n" +
+                  "now we try if it is from CloudCompare)")
+            label = plydata['vertex'].data['scalar_label']
+        vertices_pos = column_stack((
+            plydata['vertex'].data['x'],
+            plydata['vertex'].data['y'],
+            plydata['vertex'].data['z'],
+        ))
+        vertices_normals = column_stack((
+            plydata['vertex'].data['nx'],
+            plydata['vertex'].data['ny'],
+            plydata['vertex'].data['nz'],
+        ))
+        vertices_color = column_stack((
+            plydata['vertex'].data['red'],
+            plydata['vertex'].data['green'],
+            plydata['vertex'].data['blue'],
+        ))
+        if not os.path.exists(output_path):
+            os.makedirs(output_path)
         np.savez(
-            saved_name, vertices=vertices_pos, rgb=vertices_color,
+            npzfile_path,
+            vertices=vertices_pos, rgb=vertices_color,
             vertices_normals=vertices_normals, label=label)
 
-    if(if_test == 1):
-        return [vertices_pos, vertices_color, vertices_normals,
-                label, plydata]
-    else:
-        return [vertices_pos, vertices_color, vertices_normals, label]
-
-# not use at the moment.
-# def feature_norm(features, normmethod=2, debug=False):
-#     """Feature normlization."""
-#     if normmethod == 1:
-#         # one way to normalise: standardization
-#         features -= np.mean(features, axis=0)
-#         # if debug:
-#         #     print_stats(features)
-#         features /= np.std(features, axis=0)
-#         # if debug:
-#         #     print_stats(features)
-#     elif normmethod == 2:
-#
-#         # another way: scaling to unit
-#         if(features.shape[1] == 1):
-#             features = normalize(features, axis=0)
-#         else:
-#             features = normalize(features, axis=1)
-#     elif normmethod == 3:
-#         features -= np.mean(features, axis=0)
-#         features /= np.std(features, axis=0)
-#         if(features.shape[1] == 1):
-#             features = normalize(features, axis=0)
-#         else:
-#             features = normalize(features, axis=1)
-#     else:
-#         import sys
-#         sys.exit('normmethod para is not right (either 1 or 2)')
-#     return features
+    return [vertices_pos, vertices_color, vertices_normals,
+            label, plydata]
 
 
 def label_simulation_area(label_length,
@@ -168,18 +182,13 @@ def run_inference(model, steps, debug=False):
     return Q
 
 
-def unif(range):
-    """Return random value between range."""
-    return np.random.uniform(*range)
-
-
 def get_random_params():
     """Set the range for all parameters."""
     return {
-        'posi_weight': unif([0, 1]),
-        'normal_weight': unif([0, 1]),
-        'color_weight': unif([0, 1]),
-        'gaussian_weight': unif([0, 10])
+        'posi_weight': np.random.uniform(0, 1),
+        'normal_weight': np.random.uniform(0, 1),
+        'color_weight': np.random.uniform(0, 1),
+        'gaussian_weight': np.random.uniform(0, 10)
     }
 
 
@@ -223,16 +232,14 @@ def eval_para(U, face_num, paras, seg_nums,
             normalization=dcrf.NORMALIZE_SYMMETRIC
         )
     # print("inference...")
-    Q = run_inference(d, 15)
+    Q = run_inference(d, 5)
     prediction = np.argmax(Q, axis=0)
     return prediction
 
 
-def groundtruth_calculation(labels, simulating_point_index):
+def groundtruth_calculation(labels, label_id):
     """Return the index of points that have same color."""
-
-    labels_number = labels[simulating_point_index]
-    indx = np.where(labels == labels_number)
+    indx = np.where(labels == label_id)[0]
     return indx
 
 
@@ -244,216 +251,95 @@ def generate_empty_list(list_size):
     return tmp
 
 
-def get_init_and_labelled_meshes(prediction, data_obj,
-                                 labels_numeric, n_segs, whether_face):
-    """Name show."""
-    pred_vis = get_visualisation(n_segs, prediction)
-    labelled_data = get_labelled_mesh(data_obj, pred_vis, whether_face)
-
-    init_vis = get_visualisation(n_segs, labels_numeric)
-    init_data = get_labelled_mesh(
-        data_obj, copy.deepcopy(init_vis), whether_face)
-
-    return init_data, labelled_data
-
-
-# Given a face, get the vertices which bound it
-def get_face_vertices(face, vertices):
-    """Get the vertices according to the face."""
-    component_vertex_indices = face['vertex_indices']
-    return list(map(lambda idx: vertices[idx], component_vertex_indices))
-
-
-def get_labelled_mesh(data, labels, whether_face):
-    """Get label mesh."""
-    data = copy.deepcopy(data)
-    vertices = data[0]
-    faces = data[1]
-    channels = ['red', 'green', 'blue']
-
-    if(whether_face == 1):
-        for face_idx, face in enumerate(faces):
-            face_vertices = get_face_vertices(face, vertices)
-            for vert_index in range(0, 2):
-                for channel_idx, channel in enumerate(channels):
-                    face_vertices[vert_index][channel] = floor(
-                        labels[face_idx][channel_idx] * 255
-                    )
-    else:
-
-        for idx in range(len(vertices['red'])):
-            for channel_idx, channel in enumerate(channels):
-                vertices[idx][channel] = floor(
-                    labels[idx][channel_idx] * 255)
-        # for face_idx, face_vertices in enumerate(vertices):
-        #     # face_vertices = get_face_vertices(face, vertices)
-        #     for vert_index in range(7, 9):
-        #         for channel_idx, channel in enumerate(channels):
-        #             ipdb.set_trace()
-        #             face_vertices[vert_index] = floor(
-        #                 labels[face_idx][channel_idx] * 255
-        #             )
-
+def save_to_ply(ply_data, indx, output_path):
+    """Set the color of the index area to 0."""
+    data = copy.deepcopy(ply_data)
+    data['vertex']['red'] = 255
+    data['vertex']['green'] = 0
+    data['vertex']['blue'] = 0
+    data['vertex']['red'][indx] = 0
+    data['vertex']['green'][indx] = 255
+    data['vertex']['blue'][indx] = 0
     data = PlyData(data)
-    return data
-
-
-def get_visualisation(num_classes, prediction):
-    """visualisation."""
-    colours_for_vis = get_n_linear_colours_rgb(num_classes)
-    return list(map(lambda i: colours_for_vis[i], prediction))
-
-
-def get_n_linear_colours_rgb(n):
-    """Get n linear spaced rgb colours (for label visualisation)."""
-    # Evenly spaces hues
-    hues = np.linspace(0, 1, n + 1)
-
-    # Saturation and value at full
-    pad_s_v = np.ones(n + 1)
-
-    # Concatenate and reshape to form swatch image
-    padded = np.stack((hues, pad_s_v, pad_s_v))
-    hsv = padded[..., None].T
-
-    # Convert swatch image to RGB
-    rgb = color.hsv2rgb(hsv).squeeze()[:n, :]
-
-    # Squeeze to list of rgb values
-    return rgb
-
-
-def save_to_ply(
-        prediction, data_obj, labels_numeric, use_face, paras,
-        ):
-    """Save results as ply file."""
-    init_data, labelled_data = get_init_and_labelled_meshes(
-        prediction, data_obj, labels_numeric, args.n_segs, use_face
-    )
-
-    print_this = [paras['posi_weight'], paras['normal_weight'],
-                  paras['color_weight'],
-                  paras['gaussian_weight']]
-    filename = os.path.basename(args.mesh_filepath)
-    stamp = str(int(time.time()))
-    out_filename = '{}_crf_{}_{}_{}.ply'.format(
-        os.path.splitext(filename)[0], stamp, args.n_segs, print_this
-    )
-
-    labelled_data.write(os.path.join(args.output_path, out_filename))
-    print('Written {}'.format(out_filename))
-
-    out_filename = '{}_init_{}_{}_{}.ply'.format(
-        os.path.splitext(filename)[0], stamp, args.n_segs, print_this
-    )
-    init_data.write(os.path.join(args.output_path, out_filename))
-    print('Written {}'.format(out_filename))
+    output_path_ply = output_path + '.ply'
+    data.write(output_path_ply)
+    output_path_npz = output_path + '.npz'
+    np.savez(output_path_npz, indx=indx)
 
 
 def main(args):
     """Main function."""
-    if not os.path.exists(args.output_path):
-        os.makedirs(args.output_path)
-    print('Loading and parameters setting...')
+    print('Loading the json file...')
+    [
+        mesh_filepath, xml_filepath, output_path, object_num_used, ply_num
+    ] = load_json()
+    print('get the lable id...')
+    label_id = []
+    for i in range(ply_num):
+        label_id.append(
+            load_xml(xml_filepath[i], object_num_used[i], 0))
     whether_use_bilateral = 0
-    simulating_point_index = []
-    # 093
-    # simulating_point_index.append([972119, 975828, 1140442, 491021, 1204595])
-    # 207
-    # simulating_point_index.append([313301, 587101, 948647, 733043, 367594])
-    # 207-cut_version:try.ply
-    simulating_point_index.append([69070])
-    # 207-cut_version:111.ply
-    simulating_point_index.append([136099, 101948])
-    # can add more
-    # 207-density_reduced_version:112.ply
-    simulating_point_index.append([30052])
-    # simulating_point_index.append
-    # simulating_point_index.append
-    # simulating_point_index.append
-    # simulating_point_index.append
     bilateral_weight = 1
     if_test = 0
+    # for the training
+    loop_time = 1000
+    satisfied_percentage = 0.9
 
     print("load the npy file or save as npyfile...")
-    positions, colors, normals, data_obj, label_color = [], [], [], [], []
-    mesh_filepath_nums = len(args.mesh_filepath)
-    dataset_numbers = mesh_filepath_nums
+    positions, colors, normals, data_obj, label = [], [], [], [], []
     # test
-    if(dataset_numbers != len(simulating_point_index)):
-        sys.exit(
-            "the dataset numbers are not \
-            matching the simulating numbers, line 284")
-    else:
-        dataset_numbers = np.int(dataset_numbers)
-    for i in range(0, mesh_filepath_nums):
+    assert ply_num == len(label_id), (
+        "the dataset numbers are not matching the simulating numbers," +
+        " it happened at line 402")
+    # test_end
+
+    for i in range(0, ply_num):
             [positions_tmp, colors_tmp,
                 normals_tmp, label_tmp,
-                dataobj_tmp] = load_npz(args.mesh_filepath[i], if_test)
-            label_color.append(label_tmp)
+                dataobj_tmp] = load_npz(
+                    mesh_filepath[i], output_path[i])
+            label.append(label_tmp)
             positions.append(positions_tmp)
             colors.append(colors_tmp)
             normals.append(normals_tmp)
             data_obj.append(dataobj_tmp)
-
     print('now get the groundtruth labelling...')
     # get all simulating click areas!
     print("get all simulating click areas!")
-    indx_gt = generate_empty_list(dataset_numbers)
-    for i in range(dataset_numbers):
-        for j in range(len(simulating_point_index[i])):
+    indx_gt = generate_empty_list(ply_num)
+    for i in range(ply_num):
+        for j in range(len(label_id[i])):
             indx_tmp = groundtruth_calculation(
-                label_color[i], simulating_point_index[i][j])
+                label[i], label_id[i][j])
             indx_gt[i].append(indx_tmp)
 
     # test by change the color to black and save as ply file
     if(if_test):
-        for i in range(dataset_numbers):
-            for j in range(len(simulating_point_index[i])):
-                data = copy.deepcopy(data_obj[i])
-                print("testing...")
-                print("set the color value according to index...")
-                ipdb.set_trace()
-                data['vertex']['red'][indx_gt[i][j]] = 0
-                data['vertex']['green'][indx_gt[i][j]] = 0
-                data['vertex']['blue'][indx_gt[i][j]] = 0
-                data = PlyData(data)
-                print("saving ply...{}".format(simulating_point_index[i][j]))
-                out_filename = \
-                    'test_groundTruth_at_simulatingindex{}.ply'.format(
-                        simulating_point_index[i][j]
-                    )
-                data.write(os.path.join(args.output_path, out_filename))
-
-                out_filename1 = \
-                    'test_groundTruth_at_simulatingindex{}.npz'.format(
-                        simulating_point_index[i][j]
-                    )
-                np.savez(
-                  os.path.join(
-                        args.output_path, out_filename1), indx=indx_gt)
+        print("Now test by save as ply and label_id area to black...")
+        for i in range(ply_num):
+            out_filename = 'test_groundTruth_at_label{}'.format(label_id)
+            output_name = path_join(output_path[i], out_filename)
+            for j in range(len(label_id[i])):
+                save_to_ply(
+                    data_obj[i], indx_gt[i][j], output_name)
 
     # possibly normalize the features?
-
     # get face_num
     face_num = np.array([])
-    for i in range(dataset_numbers):
-        if (len(positions[i]) == len(colors[i]) == len(normals[i])):
-            face_num_tmp = len(positions[i])
-            if(if_test):
-                if(int(face_num_tmp) - face_num_tmp != 0):
-                    sys.exit('wrong line 357.')
-            face_num = np.append(face_num, face_num_tmp)
-
-        else:
-            sys.exit("the length is different, check code 361!")
+    for i in range(ply_num):
+        assert len(positions[i]) == len(colors[i]) == len(normals[i]), (
+            "postion, color and normal length are different, line 387"
+        )
+        face_num_tmp = len(positions[i])
+        assert int(face_num_tmp) - face_num_tmp == 0, (
+            "face_num_tmp is not integer line 393"
+        )
+        face_num = np.append(face_num, face_num_tmp)
 
     print("get simulated labels...")
 
     print("Now tuning...")
 
-    loop_time = 2
-    satisfied_percentage = 0.9
     eval_result = 0
     loop_indx = 0
     score = np.array([])
@@ -461,28 +347,21 @@ def main(args):
     # this setting is a tricky thing
     # want to stop the running and save the results by
     # manually change the argument
-    debug = False
     prediction = generate_empty_list(loop_time)
-    # Unary = generate_empty_list(dataset_numbers)
     labels_numeric = generate_empty_list(loop_time)
+    print(
+        "Now we start training, the satisfied percentage is {}".format(
+            satisfied_percentage))
+    print("The maximum loop time is {}".format(loop_time))
     while eval_result < satisfied_percentage and loop_indx < loop_time:
         # can be improved using parralle joblib
-        # n_segs = args.n_segs
-        # parallelise = Parallel(8)
-        # task_it = (delayed(eval_para)(
-        #     U[j], face_num, n_segs,
-        #     positions, normals, colors,
-        #     bilateral_weight, whether_use_bilateral
-        # ) for j in range(len(simulating_point_index)))
-        # tmp = parallelise(task_it)
-        # paras_tmp1, prediction_tmp1 = zip(*tmp)
-
         paras_tmp = get_random_params()
-        score_tmp1 = generate_empty_list(dataset_numbers)
-        print("totally {} data".format(dataset_numbers))
-        for i in range(dataset_numbers):
-            print('Now we start the data {} in loop {}'.format(i+1, loop_indx))
-            for j in range(len(simulating_point_index[i])):
+        score_tmp1 = generate_empty_list(ply_num)
+        print("totally {} plys".format(ply_num))
+        for i in range(ply_num):
+            print('Now we start the data {} in loop {}'.format(
+                i+1, loop_indx+1))
+            for j in range(len(label_id[i])):
                 picked_val = random.choice(indx_gt[i][j])
                 labels, labels_numeric_tmp = label_simulation_area(
                     face_num[i].astype(np.int), picked_val,
@@ -495,47 +374,49 @@ def main(args):
                     bilateral_weight, whether_use_bilateral)
                 score_tmp, _ = score_get(
                     prediction_tmp, indx_gt[i][j])
-
                 score_tmp1[i].append(score_tmp)
                 prediction[loop_indx].append(prediction_tmp)
                 labels_numeric[loop_indx].append(labels_numeric_tmp)
-        ipdb.set_trace()
+                out_filename = 'parameters{}labels{}'.format(
+                    paras_tmp, label_id[i][j])
+                output_name = path_join(output_path[i], out_filename)
+                tmp = np.where(prediction_tmp != 0)[0]
+                if(if_test):
+                    print("in test mode, save the prediction as ply" +
+                          "currently in loop {} ply {} object {},".format(
+                              loop_indx+1, i+1, j+1) +
+                          "max is: loop {}, ply {}".format(loop_time, ply_num)
+                          + " and object {} in this ply".format(
+                              len(label_id[i])))
+                    save_to_ply(data_obj[i], tmp, output_name)
+
         score_avg = np.mean(score_tmp1)
         print("the score is {}".format(score_avg))
         print("the paras is {}".format(paras_tmp))
         score = np.append(score, score_avg)
         paras = np.append(paras, paras_tmp)
-        if(debug):
-            saved_name = 'results_{}'.format(
-                simulating_point_index
-            )
-            saved_name1 = 'resultsParas_{}'.format(
-                simulating_point_index
-            )
-            np.save(saved_name, score)
-            np.save(saved_name1, paras)
         loop_indx += 1
 
     print('now save the scores and paras...')
     saved_name = 'results_{}'.format(
-        simulating_point_index
+        label_id
     )
     saved_name1 = 'resultsParas_{}'.format(
-        simulating_point_index
+        label_id
     )
     np.save(saved_name, score)
     np.save(saved_name1, paras)
-    # print('visulisations...')
-    # indx_tmp = np.argmax(score)
-    # ind = 0
-    # for i in range(dataset_numbers):
-    #     for j in range(len(simulating_point_index[i])):
-    #         save_to_ply(
-    #                 prediction[indx_tmp][ind], data_obj,
-    #                 labels_numeric[indx_tmp][ind],
-    #                 0, paras[indx_tmp],
-    #                 )
-    #         ind += ind
+    print('now save the best one as ply...')
+    indx_tmp = np.argmax(score)
+    prediction_ply = prediction[indx_tmp]
+    indx = 0
+    for i in range(ply_num):
+        for j in range(len(label_id[i])):
+            tmp = np.where(prediction_ply[indx] != 0)[0]
+            out_filename = 'scores{}parameters{}labels{}'.format(
+                score[indx_tmp], paras[indx_tmp], label_id[i][j])
+            save_to_ply(data_obj[i], tmp, out_filename)
+            indx += 1
 
 
 if __name__ == '__main__':

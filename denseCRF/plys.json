@@ -1,0 +1,37 @@
+[
+  {
+  "ply_name":"015_reduced.ply",
+  "mesh_path":"/home/hao/MyCode/mesh-segmentation/datasets/sceneNN/",
+  "object_num_used": 5,
+  "xml_name":"015.xml",
+  "output_path":"/home/hao/MyCode/mesh-segmentation/temp/015/"
+  },
+  {
+  "ply_name":"252_reduced.ply",
+  "mesh_path":"/home/hao/MyCode/mesh-segmentation/datasets/sceneNN/",
+  "object_num_used": 5,
+  "xml_name":"252.xml",
+  "output_path":"/home/hao/MyCode/mesh-segmentation/temp/252/"
+  },
+  {
+  "ply_name":"234_reduced.ply",
+  "mesh_path":"/home/hao/MyCode/mesh-segmentation/datasets/sceneNN/",
+  "object_num_used": 5,
+  "xml_name":"234.xml",
+  "output_path":"/home/hao/MyCode/mesh-segmentation/temp/234/"
+  },
+  {
+  "ply_name":"272_reduced.ply",
+  "mesh_path":"/home/hao/MyCode/mesh-segmentation/datasets/sceneNN/",
+  "object_num_used": 5,
+  "xml_name":"272.xml",
+  "output_path":"/home/hao/MyCode/mesh-segmentation/temp/272/"
+  },
+  {
+  "ply_name":"087_reduced.ply",
+  "mesh_path":"/home/hao/MyCode/mesh-segmentation/datasets/sceneNN/",
+  "object_num_used": 5,
+  "xml_name":"087.xml",
+  "output_path":"/home/hao/MyCode/mesh-segmentation/temp/087/"
+  }
+]

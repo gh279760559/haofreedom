@@ -27,9 +27,11 @@ follow the following steps:
     run merge_plys.py -m fullpath/to/ply_file_label ply_file_color -o fullpath/to/out_file
     ```
 
-   optional: -t if turn on test mode, do `-t 1` default 0.
+   	optional:   
+   	                
+   	            -t if turn on test mode, do `-t 1` default 0.
 
-	     -b if using bilateral pairwise function, default 1.
+	     		-b if using bilateral pairwise function, default 1.
 
 2. use CloudCompare to manually do 'cut' or 'density reduce'.
 
@@ -72,3 +74,4 @@ Add additional notes about how to deploy this on a live system
 This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details
 
 ## Acknowledgments
+

@@ -26,16 +26,23 @@ follow the following steps:
     ```
     run merge_plys.py -m fullpath/to/ply_file_label ply_file_color -o fullpath/to/out_file
     ```
+
    optional: -t if turn on test mode, do `-t 1` default 0.
+
 	     -b if using bilateral pairwise function, default 1.
+
 2. use CloudCompare to manually do 'cut' or 'density reduce'.
+
 3. use CloudCompare to manually select the point on the object.
+
 4. put the index numbers in save_npz_and_visualize_click_area.py (in code, easy to find)
+
 5. run save_npz_and_visualize_click_area.py to save the mesh with the black area in the click point (also include the whole object) into ply file
 
       ```
      run save_npz_and_visualize_click_area.py -i fullpath/to/ply_file -o temp -p True
      ```
+
 6. run evaluation_framework.py to start learning parameters.
 
      ```

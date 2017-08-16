@@ -11,6 +11,7 @@ import random
 import json
 import xml.etree.ElementTree as etree
 from operator import attrgetter
+import ipdb
 
 
 def build_parser():
@@ -33,6 +34,26 @@ def build_parser():
         dest='n_segs',
         type=int,
         default=2  # Four walls, ceiling, floor.
+    )
+
+    parser.add_argument(
+        '-t', '--if-test',
+        help=(
+            'if save each result as ply'
+        ),
+        dest='if_test',
+        type=int,
+        default=0  # Four walls, ceiling, floor.
+    )
+
+    parser.add_argument(
+        '-b', '--if-bilateral',
+        help=(
+            'whether using bilateral pairwise'
+        ),
+        dest='whether_use_bilateral',
+        type=int,
+        default=1  # Four walls, ceiling, floor.
     )
 
     return parser
@@ -182,14 +203,23 @@ def run_inference(model, steps, debug=False):
     return Q
 
 
-def get_random_params():
+def get_random_params(whether_use_bilateral):
     """Set the range for all parameters."""
-    return {
-        'posi_weight': np.random.uniform(0, 1),
-        'normal_weight': np.random.uniform(0, 1),
-        'color_weight': np.random.uniform(0, 1),
-        'gaussian_weight': np.random.uniform(0, 10)
-    }
+    if(whether_use_bilateral):
+        return {
+            'posi_weight': np.random.uniform(0, 1),
+            'normal_weight': np.random.uniform(0, 1),
+            'color_weight': np.random.uniform(0, 1),
+            'gaussian_weight': np.random.uniform(0, 10),
+            'bilateral_weight': np.random.uniform(0, 10)
+            }
+    else:
+        return {
+            'posi_weight': np.random.uniform(0, 1),
+            'normal_weight': np.random.uniform(0, 1),
+            'color_weight': np.random.uniform(0, 1),
+            'gaussian_weight': np.random.uniform(0, 1)
+            }
 
 
 def score_get(prediction, indx):
@@ -205,21 +235,27 @@ def score_get(prediction, indx):
 
 def eval_para(U, face_num, paras, seg_nums,
               positions, normals, colors,
-              bilateral_weight, whether_use_bilateral):
+              whether_use_bilateral):
     """Tune parameters."""
     d = dcrf.DenseCRF(face_num, seg_nums)
     # print("set Unary...")
     d.setUnaryEnergy(U)
     # print("add pairwise Energy...")
-    features_gaussian = np.concatenate(
-        (positions/paras['posi_weight'],
-         normals/paras['normal_weight'],
-         colors/paras['color_weight']
-         ), axis=1)
+
     if(whether_use_bilateral == 1):
+        features_gaussian = np.concatenate(
+            (positions/paras['posi_weight'],
+             colors/paras['color_weight']
+             ), axis=1)
         features_bilateral = np.concatenate(
             (positions/paras['posi_weight'],
              normals/paras['normal_weight']), axis=1)
+    else:
+        features_gaussian = np.concatenate(
+            (positions/paras['posi_weight'],
+             normals/paras['normal_weight'],
+             colors/paras['color_weight']
+             ), axis=1)
     d.addPairwiseEnergy(
         np.ascontiguousarray(features_gaussian.T, dtype=np.float32),
         compat=paras['gaussian_weight'], kernel=dcrf.DIAG_KERNEL,
@@ -228,11 +264,11 @@ def eval_para(U, face_num, paras, seg_nums,
     if(whether_use_bilateral == 1):
         d.addPairwiseEnergy(
             np.ascontiguousarray(features_bilateral.T, dtype=np.float32),
-            compat=bilateral_weight, kernel=dcrf.DIAG_KERNEL,
+            compat=paras['gaussian_weight'], kernel=dcrf.DIAG_KERNEL,
             normalization=dcrf.NORMALIZE_SYMMETRIC
         )
     # print("inference...")
-    Q = run_inference(d, 5)
+    Q = run_inference(d, 3)
     prediction = np.argmax(Q, axis=0)
     return prediction
 
@@ -278,11 +314,11 @@ def main(args):
     for i in range(ply_num):
         label_id.append(
             load_xml(xml_filepath[i], object_num_used[i], 0))
-    whether_use_bilateral = 0
-    bilateral_weight = 1
+    whether_use_bilateral = 1
+    # bilateral_weight = 1
     if_test = 0
     # for the training
-    loop_time = 1000
+    loop_time = 100
     satisfied_percentage = 0.9
 
     print("load the npy file or save as npyfile...")
@@ -314,12 +350,14 @@ def main(args):
             indx_gt[i].append(indx_tmp)
 
     # test by change the color to black and save as ply file
+    # ipdb.set_trace()
     if(if_test):
         print("Now test by save as ply and label_id area to black...")
         for i in range(ply_num):
-            out_filename = 'test_groundTruth_at_label{}'.format(label_id)
-            output_name = path_join(output_path[i], out_filename)
             for j in range(len(label_id[i])):
+                out_filename = 'test_groundTruth_at_label{}'.format(
+                    label_id[i][j])
+                output_name = path_join(output_path[i], out_filename)
                 save_to_ply(
                     data_obj[i], indx_gt[i][j], output_name)
 
@@ -355,7 +393,7 @@ def main(args):
     print("The maximum loop time is {}".format(loop_time))
     while eval_result < satisfied_percentage and loop_indx < loop_time:
         # can be improved using parralle joblib
-        paras_tmp = get_random_params()
+        paras_tmp = get_random_params(whether_use_bilateral)
         score_tmp1 = generate_empty_list(ply_num)
         print("totally {} plys".format(ply_num))
         for i in range(ply_num):
@@ -371,7 +409,8 @@ def main(args):
                     Unary, face_num[i].astype(np.int),
                     paras_tmp, args.n_segs,
                     positions[i], normals[i], colors[i],
-                    bilateral_weight, whether_use_bilateral)
+                    whether_use_bilateral)
+                # ipdb.set_trace()
                 score_tmp, _ = score_get(
                     prediction_tmp, indx_gt[i][j])
                 score_tmp1[i].append(score_tmp)
@@ -389,7 +428,7 @@ def main(args):
                           + " and object {} in this ply".format(
                               len(label_id[i])))
                     save_to_ply(data_obj[i], tmp, output_name)
-
+        # ipdb.set_trace()
         score_avg = np.mean(score_tmp1)
         print("the score is {}".format(score_avg))
         print("the paras is {}".format(paras_tmp))
@@ -413,13 +452,15 @@ def main(args):
     for i in range(ply_num):
         for j in range(len(label_id[i])):
             tmp = np.where(prediction_ply[indx] != 0)[0]
-            out_filename = 'scores{}parameters{}labels{}'.format(
-                score[indx_tmp], paras[indx_tmp], label_id[i][j])
+            out_filename = 'scores{}labels{}plynum{}'.format(
+                score[indx_tmp], label_id[i][j], i+1)
             save_to_ply(data_obj[i], tmp, out_filename)
             indx += 1
+
+    return [score, paras, prediction, data_obj]
 
 
 if __name__ == '__main__':
     args = build_parser().parse_args()
     print(args)
-    main(args)
+    [score, paras, prediction, data_obj] = main(args)

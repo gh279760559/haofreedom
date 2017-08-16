@@ -24,9 +24,10 @@ follow the following steps:
 1. merge 2 ply files.
 
     ```
-    run merge_plys.py -m fullpath/to/ply_file_label ply_file_color -o out_file
+    run merge_plys.py -m fullpath/to/ply_file_label ply_file_color -o fullpath/to/out_file
     ```
-
+   optional: -t if turn on test mode, do `-t 1` default 0.
+	     -b if using bilateral pairwise function, default 1.
 2. use CloudCompare to manually do 'cut' or 'density reduce'.
 3. use CloudCompare to manually select the point on the object.
 4. put the index numbers in save_npz_and_visualize_click_area.py (in code, easy to find)

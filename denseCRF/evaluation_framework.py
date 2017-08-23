@@ -1,17 +1,17 @@
 """denseCRF in 3D space."""
 import numpy as np
-import pydensecrf.densecrf as dcrf
-from plyfile import PlyData
-from skimage import color
-from pathlib import Path
 import argparse
 import os.path
 import copy
 import random
 import json
 import xml.etree.ElementTree as etree
+from plyfile import PlyData
+from skimage import color
+from pathlib import Path
 from operator import attrgetter
-import ipdb
+
+import pydensecrf.densecrf as dcrf
 
 
 def build_parser():
@@ -350,7 +350,6 @@ def main(args):
             indx_gt[i].append(indx_tmp)
 
     # test by change the color to black and save as ply file
-    # ipdb.set_trace()
     if(if_test):
         print("Now test by save as ply and label_id area to black...")
         for i in range(ply_num):
@@ -410,7 +409,6 @@ def main(args):
                     paras_tmp, args.n_segs,
                     positions[i], normals[i], colors[i],
                     whether_use_bilateral)
-                # ipdb.set_trace()
                 score_tmp, _ = score_get(
                     prediction_tmp, indx_gt[i][j])
                 score_tmp1[i].append(score_tmp)
@@ -428,7 +426,6 @@ def main(args):
                           + " and object {} in this ply".format(
                               len(label_id[i])))
                     save_to_ply(data_obj[i], tmp, output_name)
-        # ipdb.set_trace()
         score_avg = np.mean(score_tmp1)
         print("the score is {}".format(score_avg))
         print("the paras is {}".format(paras_tmp))

@@ -60,7 +60,7 @@ def build_parser():
 
 
 def load_json():
-    """Load all stuff from json file."""
+    """Load from json file."""
     args = build_parser().parse_args()
     assert os.path.isfile(args.filename), (
         'File {} does not exist!'.format(args.filename)

@@ -1,0 +1,6 @@
+*The original code has been changed for Ubuntu/Linux*
+*test under Ubuntu16.04*
+How to use:
+\item cd current directory 
+do
+\item ./playback input_file_dir output_file_dir

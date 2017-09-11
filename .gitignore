@@ -1,7 +1,1 @@
-data/
-trimesh/
-models/
-learning/
-*.mat
-*.ply
-*.png
+cmake-build-debug/

@@ -5,3 +5,4 @@ learning/
 *.mat
 *.ply
 *.png
+denseCRF/
